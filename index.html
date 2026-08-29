@@ -30,6 +30,11 @@
 
   <button id="menu-btn" title="Upgrades, Achievements &amp; Music">☰</button>
 
+  <div id="stamina-wrap">
+    <span class="label">STAMINA</span>
+    <div id="stamina-bar"><div id="stamina-fill"></div></div>
+  </div>
+
   <div id="milestone"></div>
 
   <div id="combo-display"></div>
@@ -49,7 +54,7 @@
   <div id="start-screen">
     <h1>67 <span>CLICKER</span></h1>
     <p class="tagline">he's doing the six seven all the way to the galaxy — for real this time</p>
-    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise.<br>Every real meter, every real m/s counts — from the Kármán line to light speed and beyond.<br>Buy an Engine and you'll climb even while you're not tapping.</p>
+    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise — it costs stamina, and you fall <em>fast</em> once it runs out.<br>Every real meter, every real m/s counts — from the Kármán line, through countless star systems, to light speed and beyond.<br>Buy an Engine and you'll climb even while you're not tapping.</p>
     <div class="start-buttons">
       <button id="start-btn">START</button>
       <button id="shop-open-btn" class="secondary-btn">UPGRADES</button>
@@ -77,6 +82,17 @@
           </div>
           <button class="upgrade-buy" id="buy-engine">
             <span id="engine-cost">30</span> 67s
+          </button>
+        </div>
+
+        <div class="upgrade-card" id="card-stamina">
+          <div class="upgrade-icon" id="icon-stamina">⚡</div>
+          <div class="upgrade-info">
+            <div class="upgrade-title">Stamina <span class="upgrade-level" id="stamina-level">Lv 0</span></div>
+            <div class="upgrade-desc" id="stamina-desc">Raises your max stamina — longer climbs before you run out and drop fast.</div>
+          </div>
+          <button class="upgrade-buy" id="buy-stamina">
+            <span id="stamina-cost">25</span> 67s
           </button>
         </div>
 

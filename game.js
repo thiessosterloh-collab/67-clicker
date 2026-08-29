@@ -52,13 +52,16 @@
   const COMBO_BONUS = 0.6;          // extra m/s per combo step
   const MAX_COMBO_BONUS_STEPS = 20;
   const MAX_VELOCITY = 1e13;        // safety ceiling (~33,000c), practically unbounded
-  const MIN_VELOCITY = -400;
+  const MIN_VELOCITY = -3000;
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
   const IDLE_CURRENCY_RATE = 0.0025; // 67s per m/s of velocity per second
+  const FALL_GRAVITY_MULT = 22;     // once you're actually descending, gravity hits far harder
 
   const WINGS_MAX = 10;
   const TRAIL_MAX = 10;
   const ENGINE_MAX = 500;
+  const STAMINA_MAX = 60;
+  const STAMINA_DRAIN_PER_TAP = 8;
 
   // ---------- Real-world distances (meters) ----------
   const KARMAN = 100000;            // edge of space
@@ -72,8 +75,9 @@
   const PLUTO = 5.9e12;
   const HELIOPAUSE = 1.8e13;        // ~120 AU, Voyager 1 territory
   const PROXIMA = 4.0e16;           // ~4.24 ly, nearest star
-  const GALACTIC_CENTER = 2.46e20;  // ~26,000 ly
-  const ANDROMEDA = 2.4e22;         // ~2.5 million ly
+  const GALACTIC_CENTER = 26000 * LY;   // ~26,000 ly, real distance to the core
+  const GALAXY_FAR_EDGE = 160000 * LY;  // full diameter of the Milky Way's disk — actually leaving the galaxy
+  const ANDROMEDA = 2.4e22;         // ~2.5 million ly, beyond the galaxy entirely
 
   const ZONES = [
     { start: 0,               top: "#6ec6ff", bottom: "#eaf6ff" }, // city
@@ -85,6 +89,7 @@
     { start: 6e12,            top: "#000000", bottom: "#05040d" }, // outer solar system
     { start: HELIOPAUSE,      top: "#020103", bottom: "#0c0518" }, // interstellar
     { start: GALACTIC_CENTER, top: "#050110", bottom: "#170a2e" }, // galactic core
+    { start: GALAXY_FAR_EDGE, top: "#000000", bottom: "#030103" }, // intergalactic void
   ];
 
   const MILESTONES = [
@@ -101,8 +106,9 @@
     { at: NEPTUNE,          text: "Neptune — edge of the known planets." },
     { at: PLUTO,            text: "Pluto. Still counts." },
     { at: HELIOPAUSE,       text: "The Heliopause — leaving the Sun's influence." },
-    { at: PROXIMA,          text: "Proxima Centauri — the nearest star." },
+    { at: PROXIMA,          text: "Proxima Centauri — the nearest star. Countless more ahead." },
     { at: GALACTIC_CENTER,  text: "The Galactic Center. You are basically a myth now." },
+    { at: GALAXY_FAR_EDGE,  text: "You've crossed the entire Milky Way — 160,000 light-years. You actually left the galaxy." },
     { at: ANDROMEDA,        text: "Andromeda. Okay, now you're just showing off." },
   ];
 
@@ -119,6 +125,49 @@
     { at: ANDROMEDA,      r: 90,  color: "#c9c8ff", type: "galaxy" },
   ];
 
+  // ---------- Many, many solar systems — the "levels" of the galaxy crossing ----------
+  // Real stellar density means countless systems between here and the far side of the
+  // disk; we render a representative sample, spaced by order of magnitude (log-distance)
+  // across the real span from our nearest neighbor star out to the far edge of the galaxy.
+  const NUM_SOLAR_SYSTEMS = 90;
+  const STAR_PALETTE = ["#ffd27a", "#fff3d0", "#a8c8ff", "#ff8a5c", "#e8eaff"];
+  const SYS_PLANET_COLORS = ["#c1440e", "#d8b26a", "#7fd8d8", "#4f7ecb", "#c9b8a3", "#e3c98f", "#ff9f6e", "#9fb8ff"];
+  const NAME_PREFIXES = ["Kepler", "HD", "Gliese", "TRAPPIST", "Wolf", "Ross", "HIP", "TOI", "Barnard"];
+
+  function genSystemName(seed) {
+    const prefix = NAME_PREFIXES[Math.floor(hash(seed + 2.2) * NAME_PREFIXES.length)];
+    const num = 100 + Math.floor(hash(seed + 3.3) * 9899);
+    return prefix + "-" + num;
+  }
+
+  const SOLAR_SYSTEMS = [];
+  {
+    const logStart = Math.log10(PROXIMA);
+    const logEnd = Math.log10(GALAXY_FAR_EDGE);
+    for (let i = 0; i < NUM_SOLAR_SYSTEMS; i++) {
+      const frac = i / (NUM_SOLAR_SYSTEMS - 1);
+      const at = Math.pow(10, logStart + frac * (logEnd - logStart));
+      const seed = i * 7.13 + 1;
+      const planetCount = 2 + Math.floor(hash(seed + 0.3) * 4);
+      const planets = [];
+      for (let p = 0; p < planetCount; p++) {
+        planets.push({
+          offsetFrac: (p + 1) * (0.012 + hash(seed + p + 0.5) * 0.01),
+          r: 8 + hash(seed + p + 0.7) * 20,
+          color: SYS_PLANET_COLORS[Math.floor(hash(seed + p + 0.9) * SYS_PLANET_COLORS.length)],
+          ring: hash(seed + p + 1.1) > 0.82,
+        });
+      }
+      SOLAR_SYSTEMS.push({
+        at,
+        starColor: STAR_PALETTE[Math.floor(hash(seed + 0.2) * STAR_PALETTE.length)],
+        starR: 40 + hash(seed + 0.4) * 50,
+        name: genSystemName(seed),
+        planets,
+      });
+    }
+  }
+
   // ---------- Achievements (velocity thresholds, m/s) ----------
   const ACHIEVEMENTS = [
     { id: "mach1",    v: 343,          name: "Mach 1",                        desc: "Broke the sound barrier." },
@@ -129,6 +178,8 @@
     { id: "10c",      v: 10 * C,       name: "Ludicrous Speed",               desc: "Ten times light speed. Physics has left the chat." },
     { id: "100c",     v: 100 * C,      name: "Faster Than Light, Casually",   desc: "One hundred light speeds. No big deal." },
     { id: "1000c",    v: 1000 * C,     name: "Tachyon Certified",             desc: "One thousand times light speed." },
+    { id: "systems50", kind: "systems", v: 50,             name: "Grand Tour",  desc: "Passed 50 solar systems on the way through." },
+    { id: "galaxyout", kind: "distance", v: GALAXY_FAR_EDGE, name: "Galaxy's Edge", desc: "160,000 light-years — you crossed the entire Milky Way." },
   ];
 
   // ---------- Decorative world objects (seeded, fixed, real-ish altitude bands) ----------
@@ -225,7 +276,12 @@
     wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, WINGS_MAX),
     trailLevel: clamp(loadNum("sixseven_trail", 0), 0, TRAIL_MAX),
     engineLevel: clamp(loadNum("sixseven_engine", 0), 0, ENGINE_MAX),
+    staminaLevel: clamp(loadNum("sixseven_stamina", 0), 0, STAMINA_MAX),
+    stamina: 0,
+    exhausted: false,
     achievements: loadSet("sixseven_achievements"),
+    systemsPassed: 0,
+    nextSystemIdx: 0,
     running: false,
     paused: false,
     t: 0,
@@ -256,6 +312,7 @@
     localStorage.setItem("sixseven_wings", String(state.wingsLevel));
     localStorage.setItem("sixseven_trail", String(state.trailLevel));
     localStorage.setItem("sixseven_engine", String(state.engineLevel));
+    localStorage.setItem("sixseven_stamina", String(state.staminaLevel));
   }
   function persistSession() {
     localStorage.setItem("sixseven_lastseen", String(Date.now()));
@@ -266,10 +323,22 @@
   function wingsCost(level) { return Math.round(20 * Math.pow(1.55, level)); }
   function trailCost(level) { return Math.round(15 * Math.pow(1.5, level)); }
   function engineCost(level) { return Math.round(30 * Math.pow(1.28, level)); }
+  function staminaCost(level) { return Math.round(25 * Math.pow(1.32, level)); }
   function wingsThrustMult(level) { return 1 + level * 0.16; }
   function wingsGravityMult(level) { return 1 - Math.min(level * 0.035, 0.35); }
   function trailTapValue(level) { return 1 + level; }
   function engineAccel(level) { return level <= 0 ? 0 : 5 * Math.pow(1.42, level - 1); }
+  function staminaMax(level) { return 100 * Math.pow(1.35, level); }
+  function staminaRegenRate(level) { return staminaMax(level) * 0.12; }
+
+  // exponential currency bonus that scales with how far out you are (in decades of
+  // real distance), so income keeps pace with the exponentially pricier upgrades
+  function distanceRewardMult(distance) {
+    const decades = Math.max(0, Math.log10(distance + 1) - 2);
+    return Math.pow(1.35, decades);
+  }
+
+  state.stamina = staminaMax(state.staminaLevel);
 
   function fmtDistance(m) {
     if (m < 1000) return Math.floor(m) + " m";
@@ -311,6 +380,10 @@
   const engineLevelEl = document.getElementById("engine-level");
   const engineDescEl = document.getElementById("engine-desc");
   const buyEngineBtn = document.getElementById("buy-engine");
+  const staminaLevelEl = document.getElementById("stamina-level");
+  const staminaDescEl = document.getElementById("stamina-desc");
+  const buyStaminaBtn = document.getElementById("buy-stamina");
+  const staminaFillEl = document.getElementById("stamina-fill");
   const discRack = document.getElementById("disc-rack");
   const muteBtn = document.getElementById("mute-btn");
   const achievementListEl = document.getElementById("achievement-list");
@@ -342,6 +415,12 @@
       ? "Passive thrust — keeps accelerating even when you're not tapping. This is the main way to reach light speed."
       : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust, always on`;
     setBuyState(buyEngineBtn, eMaxed, engineCost(eLevel));
+
+    const sLevel = state.staminaLevel;
+    const sMaxed = sLevel >= STAMINA_MAX;
+    staminaLevelEl.textContent = sMaxed ? "MAX" : "Lv " + sLevel;
+    staminaDescEl.textContent = `Max stamina: ${Math.round(staminaMax(sLevel))} — longer climbs before you drop`;
+    setBuyState(buyStaminaBtn, sMaxed, staminaCost(sLevel));
 
     refreshAchievementsUI();
   }
@@ -394,11 +473,30 @@
     refreshShopUI();
   }
 
+  function buyStamina() {
+    if (state.staminaLevel >= STAMINA_MAX) return;
+    const cost = staminaCost(state.staminaLevel);
+    if (state.bank < cost) return;
+    state.bank -= cost;
+    state.staminaLevel++;
+    persistBank();
+    persistLevels();
+    Audio67.playPurchase();
+    refreshShopUI();
+  }
+
   buyWingsBtn.addEventListener("click", buyWings);
   buyTrailBtn.addEventListener("click", buyTrail);
   buyEngineBtn.addEventListener("click", buyEngine);
+  buyStaminaBtn.addEventListener("click", buyStamina);
 
   // ---------- Achievements UI ----------
+  function achievementThresh(a) {
+    if (a.kind === "distance") return fmtDistance(a.v);
+    if (a.kind === "systems") return a.v + " systems";
+    return fmtVelocity(a.v);
+  }
+
   function refreshAchievementsUI() {
     achievementListEl.innerHTML = "";
     ACHIEVEMENTS.forEach((a) => {
@@ -409,20 +507,27 @@
         <div class="achievement-icon">${unlocked ? "🏆" : "🔒"}</div>
         <div class="achievement-text">
           <div class="achievement-name">${unlocked ? a.name : "???"}</div>
-          <div class="achievement-desc">${unlocked ? a.desc : "Reach " + fmtVelocity(a.v) + " to unlock."}</div>
+          <div class="achievement-desc">${unlocked ? a.desc : "Reach " + achievementThresh(a) + " to unlock."}</div>
         </div>
-        <div class="achievement-thresh">${fmtVelocity(a.v)}</div>
+        <div class="achievement-thresh">${achievementThresh(a)}</div>
       `;
       achievementListEl.appendChild(el);
     });
   }
 
+  function achievementProgress(a) {
+    if (a.kind === "distance") return state.altitude;
+    if (a.kind === "systems") return state.systemsPassed;
+    return state.velocity;
+  }
+
   function checkAchievements() {
     for (const a of ACHIEVEMENTS) {
-      if (!state.achievements.has(a.id) && state.velocity >= a.v) {
+      if (!state.achievements.has(a.id) && achievementProgress(a) >= a.v) {
         state.achievements.add(a.id);
         localStorage.setItem("sixseven_achievements", JSON.stringify([...state.achievements]));
         Audio67.playAchievement();
+        if (a.id === "mach1") Audio67.playSonicBoom();
         showMilestone("🏆 " + a.name + " — " + a.desc, 4200);
       }
     }
@@ -496,6 +601,17 @@
   });
 
   // ---------- Input ----------
+  function tryThrust(mult) {
+    if (state.exhausted || state.stamina <= 0) {
+      Audio67.playEmpty();
+      return false;
+    }
+    applyThrust(mult);
+    state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN_PER_TAP);
+    if (state.stamina <= 0) state.exhausted = true;
+    return true;
+  }
+
   function press(key) {
     if (!state.running || state.paused) return;
     const now = performance.now();
@@ -507,7 +623,7 @@
       state.lastKey = key;
       state.lastPressAt = now;
       state.combo = 1;
-      applyThrust(0.6);
+      tryThrust(0.6);
       return;
     }
 
@@ -521,12 +637,13 @@
       state.lastKey = key;
       state.lastPressAt = now;
       state.tilt = key === "a" ? -1 : 1;
-      applyThrust(1);
-      spawnLabel(key);
 
-      state.bank += trailTapValue(state.trailLevel);
-      persistBank();
-      refreshBankDisplays();
+      if (tryThrust(1)) {
+        spawnLabel(key);
+        state.bank += trailTapValue(state.trailLevel) * distanceRewardMult(state.altitude);
+        persistBank();
+        refreshBankDisplays();
+      }
     } else {
       // same key twice in a row: no thrust, breaks combo
       state.combo = 0;
@@ -626,6 +743,7 @@
       state.milestoneIdx < MILESTONES.length &&
       state.altitude >= MILESTONES[state.milestoneIdx].at
     ) {
+      if (state.milestoneIdx === 0) Audio67.playRocketRumble();
       showMilestone(MILESTONES[state.milestoneIdx].text);
       state.milestoneIdx++;
     }
@@ -636,6 +754,20 @@
     Audio67.playMilestone();
     clearTimeout(milestoneTimer);
     milestoneTimer = setTimeout(() => milestoneEl.classList.remove("show"), duration || 2600);
+  }
+
+  // ---------- Solar systems passed ----------
+  function checkSolarSystems() {
+    while (
+      state.nextSystemIdx < SOLAR_SYSTEMS.length &&
+      state.altitude >= SOLAR_SYSTEMS[state.nextSystemIdx].at
+    ) {
+      state.systemsPassed++;
+      if (state.systemsPassed <= 3 || state.systemsPassed % 10 === 0) {
+        showMilestone(`Entering system ${SOLAR_SYSTEMS[state.nextSystemIdx].name}`);
+      }
+      state.nextSystemIdx++;
+    }
   }
 
   // ---------- World -> screen (adaptive camera: keeps real 1:1 distances, zoom auto-scales) ----------
@@ -988,6 +1120,56 @@
     }
   }
 
+  function drawSolarSystems(altitude, t) {
+    for (const sys of SOLAR_SYSTEMS) {
+      const starSy = worldToScreenY(sys.at, altitude, 0.6);
+      const starOp = edgeFade(starSy);
+      const sx = W * (0.25 + 0.5 * hash(sys.at));
+
+      if (starOp > 0) {
+        ctx.save();
+        ctx.globalAlpha = starOp;
+        const pulse = 1 + 0.06 * Math.sin(t * 2 + sys.at * 0.0000001);
+        const g = ctx.createRadialGradient(sx, starSy, 0, sx, starSy, sys.starR * pulse);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(0.4, sys.starColor);
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, starSy, sys.starR * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      for (let i = 0; i < sys.planets.length; i++) {
+        const pl = sys.planets[i];
+        const planetAt = sys.at + sys.at * pl.offsetFrac * (i % 2 === 0 ? 1 : -1);
+        const psy = worldToScreenY(planetAt, altitude, 0.6);
+        const op = edgeFade(psy);
+        if (op <= 0) continue;
+        const psx = sx + (i - sys.planets.length / 2) * 55;
+        ctx.save();
+        ctx.globalAlpha = op;
+        if (pl.ring) {
+          ctx.strokeStyle = "rgba(230,210,160,0.7)";
+          ctx.lineWidth = pl.r * 0.35;
+          ctx.beginPath();
+          ctx.ellipse(psx, psy, pl.r * 1.7, pl.r * 0.5, -0.3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        const g = ctx.createRadialGradient(psx - pl.r * 0.3, psy - pl.r * 0.3, pl.r * 0.1, psx, psy, pl.r);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(0.2, pl.color);
+        g.addColorStop(1, "#000");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(psx, psy, pl.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
   // ---------- Player ----------
   function drawWings(level, t) {
     if (level <= 0) return;
@@ -1148,9 +1330,17 @@
     state.t += dt;
 
     if (state.running && !state.paused) {
-      const effGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
+      const normalGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
+      const outOfGas = state.exhausted && engineAccel(state.engineLevel) < normalGravity;
+      const fallMult = (state.velocity < 0 || outOfGas) ? FALL_GRAVITY_MULT : 1;
+      const effGravity = normalGravity * fallMult;
       state.velocity += (engineAccel(state.engineLevel) - effGravity) * dt;
       state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
+
+      const smaxNow = staminaMax(state.staminaLevel);
+      state.stamina = Math.min(smaxNow, state.stamina + staminaRegenRate(state.staminaLevel) * dt);
+      if (state.exhausted && state.stamina >= smaxNow * 0.25) state.exhausted = false;
+
       const wasAirborne = state.altitude > 0;
       state.altitude += state.velocity * dt;
       if (state.altitude <= 0) {
@@ -1171,9 +1361,9 @@
         localStorage.setItem("sixseven_best", String(Math.floor(state.best)));
       }
 
-      // idle currency income, proportional to current speed
+      // idle currency income, proportional to current speed, amplified the further out you are
       if (state.velocity > 0) {
-        state.bank += state.velocity * IDLE_CURRENCY_RATE * dt;
+        state.bank += state.velocity * IDLE_CURRENCY_RATE * dt * distanceRewardMult(state.altitude);
       }
 
       // combo decays if too slow
@@ -1201,7 +1391,10 @@
       }
 
       checkMilestones();
+      checkSolarSystems();
       checkAchievements();
+
+      Audio67.setWindIntensity(state.altitude < KARMAN ? clamp(Math.abs(state.velocity) / 300, 0, 1) : 0);
 
       for (const pt of state.particles) pt.age += dt;
       state.particles = state.particles.filter((p) => p.age < p.life);
@@ -1212,6 +1405,12 @@
       speedEl.textContent = fmtVelocity(state.velocity);
       bestEl.textContent = fmtDistance(state.best);
       comboEl.textContent = state.combo > 1 ? `COMBO ×${state.combo}` : "";
+
+      const smax = staminaMax(state.staminaLevel);
+      const staminaPct = clamp((state.stamina / smax) * 100, 0, 100);
+      staminaFillEl.style.width = staminaPct + "%";
+      staminaFillEl.classList.toggle("low", staminaPct < 30 && staminaPct > 0);
+      staminaFillEl.classList.toggle("empty", staminaPct <= 0);
 
       state.saveAccum += dt;
       if (state.saveAccum > 1) {
@@ -1226,6 +1425,7 @@
     drawStars(state.altitude, state.t);
     drawGalaxySwirl(state.altitude, state.t);
     drawLandmarks(state.altitude, state.t);
+    drawSolarSystems(state.altitude, state.t);
     drawSatellites(state.altitude, state.t);
     drawRockets(state.altitude);
     drawPlanes(state.altitude, state.t);

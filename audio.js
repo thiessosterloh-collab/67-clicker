@@ -27,6 +27,18 @@ const Audio67 = (() => {
     if (ctx.state === "suspended") ctx.resume();
   }
 
+  // ---------- noise buffer (for real-feeling wind / rumble / boom effects) ----------
+  let noiseBuffer = null;
+  function getNoiseBuffer() {
+    ensureCtx();
+    if (noiseBuffer) return noiseBuffer;
+    const len = ctx.sampleRate * 2;
+    noiseBuffer = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    return noiseBuffer;
+  }
+
   // ---------- note name -> frequency ----------
   const SEMITONE = { C: 0, "C#": 1, D: 2, "D#": 3, E: 4, F: 5, "F#": 6, G: 7, "G#": 8, A: 9, "A#": 10, B: 11 };
   function noteFreq(name) {
@@ -84,6 +96,102 @@ const Audio67 = (() => {
     if (!ctx) return;
     const t0 = ctx.currentTime;
     ["C5", "E5", "G5", "C6"].forEach((n, i) => blip(noteFreq(n), 0.25, "triangle", 0.8, t0 + i * 0.06));
+  }
+
+  function playSonicBoom() {
+    ensureCtx();
+    const t0 = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = getNoiseBuffer();
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(2200, t0);
+    filter.frequency.exponentialRampToValueAtTime(90, t0 + 0.35);
+    filter.Q.value = 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.9, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(sfxGain);
+    src.start(t0);
+    src.stop(t0 + 0.45);
+
+    const sub = ctx.createOscillator();
+    const subG = ctx.createGain();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(120, t0);
+    sub.frequency.exponentialRampToValueAtTime(35, t0 + 0.3);
+    subG.gain.setValueAtTime(0.7, t0);
+    subG.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+    sub.connect(subG);
+    subG.connect(sfxGain);
+    sub.start(t0);
+    sub.stop(t0 + 0.4);
+  }
+
+  function playRocketRumble() {
+    ensureCtx();
+    const t0 = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = getNoiseBuffer();
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(220, t0);
+    filter.frequency.linearRampToValueAtTime(70, t0 + 1.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.5, t0 + 0.1);
+    g.gain.linearRampToValueAtTime(0, t0 + 1.4);
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(sfxGain);
+    src.start(t0);
+    src.stop(t0 + 1.45);
+  }
+
+  function playEmpty() {
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(140, t0);
+    osc.frequency.exponentialRampToValueAtTime(70, t0 + 0.12);
+    g.gain.setValueAtTime(0.25, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+    osc.connect(g);
+    g.connect(sfxGain);
+    osc.start(t0);
+    osc.stop(t0 + 0.16);
+  }
+
+  // ---------- continuous wind (real-ish filtered noise, intensity follows speed) ----------
+  let windSrc = null, windFilter = null, windGain = null;
+  function ensureWind() {
+    if (windSrc) return;
+    ensureCtx();
+    windSrc = ctx.createBufferSource();
+    windSrc.buffer = getNoiseBuffer();
+    windSrc.loop = true;
+    windFilter = ctx.createBiquadFilter();
+    windFilter.type = "bandpass";
+    windFilter.frequency.value = 400;
+    windFilter.Q.value = 0.6;
+    windGain = ctx.createGain();
+    windGain.gain.value = 0;
+    windSrc.connect(windFilter);
+    windFilter.connect(windGain);
+    windGain.connect(sfxGain);
+    windSrc.start();
+  }
+  function setWindIntensity(intensity) {
+    if (!ctx) return;
+    ensureWind();
+    const clamped = Math.max(0, Math.min(1, intensity));
+    windGain.gain.setTargetAtTime(clamped * 0.4, ctx.currentTime, 0.15);
+    windFilter.frequency.setTargetAtTime(300 + clamped * 900, ctx.currentTime, 0.2);
   }
 
   function playLand() {
@@ -287,6 +395,10 @@ const Audio67 = (() => {
     playAchievement,
     playPurchase,
     playLand,
+    playSonicBoom,
+    playRocketRumble,
+    playEmpty,
+    setWindIntensity,
     setTrack,
     getTracks,
     currentTrack,
