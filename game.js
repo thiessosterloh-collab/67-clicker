@@ -50,17 +50,17 @@
   // ---------- Game tuning ----------
   const TAP_IMPULSE_BASE = 4;       // m/s per valid alternation
   const COMBO_BONUS = 0.6;          // extra m/s per combo step
-  const MAX_COMBO_BONUS_STEPS = 20;
-  const MAX_VELOCITY = 1e13;        // safety ceiling (~33,000c), practically unbounded
+  const MAX_COMBO_BONUS_STEPS = 250;   // 10x — bigger combos matter over a much bigger world
+  const MAX_VELOCITY = 1e15;        // safety ceiling, raised 100x — practically unbounded
   const MIN_VELOCITY = -3000;
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
   const IDLE_CURRENCY_RATE = 0.0025; // 67s per m/s of velocity per second
   const FALL_GRAVITY_MULT = 22;     // once you're actually descending, gravity hits far harder
 
-  const WINGS_MAX = 10;
-  const TRAIL_MAX = 10;
-  const ENGINE_MAX = 500;
-  const STAMINA_MAX = 60;
+  const WINGS_MAX = 120;    // 10x
+  const TRAIL_MAX = 120;    // 10x
+  const ENGINE_MAX = 6000;  // 12x
+  const STAMINA_MAX = 700;  // ~12x
   const STAMINA_DRAIN_PER_TAP = 8;
 
   // ---------- Real-world distances (meters) ----------
@@ -770,17 +770,33 @@
     }
   }
 
-  // ---------- World -> screen (adaptive camera: keeps real 1:1 distances, zoom auto-scales) ----------
+  // ---------- World -> screen ----------
+  // Each object/category gets its OWN fixed scale (based on its own real-world
+  // characteristic distance, not the player's current position). That means as you
+  // pass something, its screen position keeps moving — steadily downward — and it
+  // scrolls fully off the bottom instead of asymptotically settling in place. Every
+  // object gets a comparable "screen life" relative to its own scale, so a nearby
+  // building and a distant galaxy both cross the screen over a similar, consistent
+  // stretch, just at wildly different real distances.
   const CENTER_Y_FRAC = 0.56;
   const VIEW_WINDOW = 0.45;
   const DIST_FLOOR = 600;
 
-  function currentScale(distance) {
-    const ref = Math.max(distance, DIST_FLOOR);
-    return (VIEW_WINDOW * H) / ref;
+  function scaleFor(referenceDistance) {
+    return (VIEW_WINDOW * H) / Math.max(referenceDistance, DIST_FLOOR);
   }
-  function worldToScreenY(worldY, distance, parallax = 1) {
-    return H * CENTER_Y_FRAC - (worldY - distance) * currentScale(distance) * parallax;
+  // For a landmark whose own real distance IS its reference point: using scaleFor(at)
+  // directly is a trap — at cancels out of (at - distance) * scale, so every landmark
+  // would appear at the same fixed spot the instant the game starts, no matter how
+  // far away it actually is. Instead size the window as a FRACTION of the landmark's
+  // own distance, so bigger/farther things get a proportionally bigger (but still
+  // genuinely distance-gated) window to appear, cross, and scroll away in.
+  function scaleForLandmark(at) {
+    const WINDOW_FRACTION = 0.3;
+    return (VIEW_WINDOW * H) / (WINDOW_FRACTION * Math.max(at, DIST_FLOOR));
+  }
+  function screenY(worldY, distance, scale, parallax = 1) {
+    return H * CENTER_Y_FRAC - (worldY - distance) * scale * parallax;
   }
   // soft fade only right at the true screen edge — objects stay visible the whole
   // time they're actually on screen instead of popping based on arbitrary distance
@@ -791,6 +807,14 @@
     const bottomFade = clamp((H + pad - sy) / pad, 0, 1);
     return Math.min(topFade, bottomFade, 1);
   }
+
+  const CITY_SCALE_REF = 2000;
+  const CLOUD_SCALE_REF = 5000;
+  const PLANE_SCALE_REF = 10000;
+  const ROCKET_SCALE_REF = 55000;
+  const SATELLITE_SCALE_REF = 1200000;
+  const EARTH_SCALE_REF = 1500000;
+  const EARTH_R = 260;
 
   // ---------- Drawing helpers ----------
   function currentZoneColors(altitude) {
@@ -827,9 +851,9 @@
     ctx.save();
     ctx.globalAlpha = op;
     const spacing = 260;
-    const scale = currentScale(altitude);
+    const STAR_DRIFT_RATE = 0.00025;
     const parallax = 0.15;
-    const offset = (altitude * scale * parallax) % spacing;
+    const offset = (altitude * STAR_DRIFT_RATE * parallax) % spacing;
     const cols = Math.ceil(W / spacing) + 2;
     const rows = Math.ceil(H / spacing) + 2;
     for (let r = -1; r < rows; r++) {
@@ -874,8 +898,59 @@
     ctx.restore();
   }
 
+  function drawEarth(altitude) {
+    const scale = scaleFor(EARTH_SCALE_REF);
+    const sy = screenY(0, altitude, scale);
+    const op = edgeFade(sy);
+    if (op <= 0) return;
+    // no curvature is visible from the ground — it fades in through the stratosphere
+    const curveFade = clamp((altitude - 20000) / 60000, 0, 1);
+    if (curveFade <= 0) return;
+    const shrink = clamp(EARTH_SCALE_REF / Math.max(altitude, EARTH_SCALE_REF), 0.06, 1);
+    const r = EARTH_R * shrink;
+    const sx = W / 2;
+
+    ctx.save();
+    ctx.globalAlpha = op * curveFade;
+
+    const g = ctx.createRadialGradient(sx - r * 0.3, sy - r * 0.3, r * 0.1, sx, sy, r);
+    g.addColorStop(0, "#bfe8ff");
+    g.addColorStop(0.35, "#4a9fd6");
+    g.addColorStop(0.7, "#2f6fae");
+    g.addColorStop(1, "#0c2c4a");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = "rgba(90,140,80,0.55)";
+    [[-0.3, -0.2, 0.35], [0.25, 0.1, 0.3], [-0.1, 0.35, 0.22], [0.4, -0.35, 0.18]].forEach(([dx, dy, rr]) => {
+      ctx.beginPath();
+      ctx.arc(sx + dx * r, sy + dy * r, rr * r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    [[-0.15, -0.3, 0.25], [0.3, 0.2, 0.2], [-0.35, 0.15, 0.18]].forEach(([dx, dy, rr]) => {
+      ctx.beginPath();
+      ctx.ellipse(sx + dx * r, sy + dy * r, rr * r, rr * r * 0.5, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(150,210,255,0.5)";
+    ctx.lineWidth = Math.max(2, r * 0.04);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 1.02, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawBuildings(altitude) {
-    const y = worldToScreenY(0, altitude);
+    const y = screenY(0, altitude, scaleFor(CITY_SCALE_REF));
     if (y < -400 || y > H + 400) return;
     const op = edgeFade(y);
     if (op <= 0) return;
@@ -897,10 +972,11 @@
   }
 
   function drawCloudsAndBirds(altitude, t) {
+    const scale = scaleFor(CLOUD_SCALE_REF);
     ctx.save();
     ctx.fillStyle = "rgba(255,255,255,0.85)";
     for (const c of clouds) {
-      const sy = worldToScreenY(c.y, altitude);
+      const sy = screenY(c.y, altitude, scale);
       const op = edgeFade(sy);
       if (op <= 0) continue;
       ctx.globalAlpha = op * 0.85;
@@ -915,7 +991,7 @@
     ctx.strokeStyle = "rgba(40,40,40,0.7)";
     ctx.lineWidth = 2;
     for (const b of birds) {
-      const sy = worldToScreenY(b.y, altitude) + Math.sin(t * 2 + b.phase) * 8;
+      const sy = screenY(b.y, altitude, scale) + Math.sin(t * 2 + b.phase) * 8;
       const op = edgeFade(sy);
       if (op <= 0) continue;
       ctx.globalAlpha = op * 0.7;
@@ -930,9 +1006,10 @@
   }
 
   function drawPlanes(altitude, t) {
+    const scale = scaleFor(PLANE_SCALE_REF);
     ctx.save();
     for (const p of planes) {
-      const sy = worldToScreenY(p.y, altitude);
+      const sy = screenY(p.y, altitude, scale);
       const op = edgeFade(sy);
       if (op <= 0) continue;
       ctx.globalAlpha = op;
@@ -966,9 +1043,10 @@
   }
 
   function drawRockets(altitude) {
+    const scale = scaleFor(ROCKET_SCALE_REF);
     ctx.save();
     for (const r of rockets) {
-      const sy = worldToScreenY(r.y, altitude);
+      const sy = screenY(r.y, altitude, scale);
       const op = edgeFade(sy);
       if (op <= 0) continue;
       ctx.globalAlpha = op;
@@ -1010,10 +1088,11 @@
   }
 
   function drawSatellites(altitude, t) {
+    const scale = scaleFor(SATELLITE_SCALE_REF);
     ctx.save();
     ctx.fillStyle = "#cfd6e0";
     for (const s of satellites) {
-      const sy = worldToScreenY(s.y, altitude);
+      const sy = screenY(s.y, altitude, scale);
       const op = edgeFade(sy);
       if (op <= 0) continue;
       ctx.globalAlpha = op;
@@ -1034,7 +1113,7 @@
 
   function drawLandmarks(altitude, t) {
     for (const p of LANDMARKS) {
-      const sy = worldToScreenY(p.at, altitude, 0.6);
+      const sy = screenY(p.at, altitude, scaleForLandmark(p.at), 0.6);
       const op = edgeFade(sy);
       if (op <= 0) continue;
       const sx = W * (0.3 + 0.4 * hash(p.at));
@@ -1122,7 +1201,8 @@
 
   function drawSolarSystems(altitude, t) {
     for (const sys of SOLAR_SYSTEMS) {
-      const starSy = worldToScreenY(sys.at, altitude, 0.6);
+      const sysScale = scaleForLandmark(sys.at);
+      const starSy = screenY(sys.at, altitude, sysScale, 0.6);
       const starOp = edgeFade(starSy);
       const sx = W * (0.25 + 0.5 * hash(sys.at));
 
@@ -1144,7 +1224,7 @@
       for (let i = 0; i < sys.planets.length; i++) {
         const pl = sys.planets[i];
         const planetAt = sys.at + sys.at * pl.offsetFrac * (i % 2 === 0 ? 1 : -1);
-        const psy = worldToScreenY(planetAt, altitude, 0.6);
+        const psy = screenY(planetAt, altitude, sysScale, 0.6);
         const op = edgeFade(psy);
         if (op <= 0) continue;
         const psx = sx + (i - sys.planets.length / 2) * 55;
@@ -1424,6 +1504,7 @@
     drawSky(state.altitude);
     drawStars(state.altitude, state.t);
     drawGalaxySwirl(state.altitude, state.t);
+    drawEarth(state.altitude);
     drawLandmarks(state.altitude, state.t);
     drawSolarSystems(state.altitude, state.t);
     drawSatellites(state.altitude, state.t);
