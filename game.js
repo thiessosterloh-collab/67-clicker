@@ -48,13 +48,13 @@
   const GRAVITY = 9.81;             // real Earth gravity, m/s^2
 
   // ---------- Game tuning ----------
-  const TAP_IMPULSE_BASE = 4;       // m/s per valid alternation
-  const COMBO_BONUS = 0.6;          // extra m/s per combo step
+  const TAP_IMPULSE_BASE = 8;       // m/s per valid alternation (2x — faster overall progress)
+  const COMBO_BONUS = 1.2;          // extra m/s per combo step (2x)
   const MAX_COMBO_BONUS_STEPS = 250;   // 10x — bigger combos matter over a much bigger world
   const MAX_VELOCITY = 1e15;        // safety ceiling, raised 100x — practically unbounded
   const MIN_VELOCITY = -3000;
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
-  const IDLE_CURRENCY_RATE = 0.0025; // 67s per m/s of velocity per second
+  const IDLE_CURRENCY_RATE = 0.008; // 67s per m/s of velocity per second (~3x — faster economy)
   const FALL_GRAVITY_MULT = 22;     // once you're actually descending, gravity hits far harder
 
   const WINGS_MAX = 120;    // 10x
@@ -62,6 +62,9 @@
   const ENGINE_MAX = 6000;  // 12x
   const STAMINA_MAX = 700;  // ~12x
   const STAMINA_DRAIN_PER_TAP = 8;
+
+  const ENGINE_FUEL_MAX = 60;     // seconds of continuous engine runtime on a full tank
+  const ENGINE_REFUEL_TIME = 25;  // seconds to fully refuel once the tank runs dry
 
   // ---------- Real-world distances (meters) ----------
   const KARMAN = 100000;            // edge of space
@@ -142,7 +145,9 @@
 
   const SOLAR_SYSTEMS = [];
   {
-    const logStart = Math.log10(PROXIMA);
+    // start right past our own solar system rather than all the way out at Proxima's
+    // real distance — brings the first "other system" a lot closer
+    const logStart = Math.log10(HELIOPAUSE);
     const logEnd = Math.log10(GALAXY_FAR_EDGE);
     for (let i = 0; i < NUM_SOLAR_SYSTEMS; i++) {
       const frac = i / (NUM_SOLAR_SYSTEMS - 1);
@@ -279,6 +284,8 @@
     staminaLevel: clamp(loadNum("sixseven_stamina", 0), 0, STAMINA_MAX),
     stamina: 0,
     exhausted: false,
+    engineFuel: ENGINE_FUEL_MAX,
+    engineDepleted: false,
     achievements: loadSet("sixseven_achievements"),
     systemsPassed: 0,
     nextSystemIdx: 0,
@@ -320,14 +327,14 @@
   }
   window.addEventListener("beforeunload", persistSession);
 
-  function wingsCost(level) { return Math.round(20 * Math.pow(1.55, level)); }
-  function trailCost(level) { return Math.round(15 * Math.pow(1.5, level)); }
-  function engineCost(level) { return Math.round(30 * Math.pow(1.28, level)); }
-  function staminaCost(level) { return Math.round(25 * Math.pow(1.32, level)); }
+  function wingsCost(level) { return Math.round(20 * Math.pow(1.45, level)); }
+  function trailCost(level) { return Math.round(15 * Math.pow(1.4, level)); }
+  function engineCost(level) { return Math.round(22 * Math.pow(1.2, level)); }
+  function staminaCost(level) { return Math.round(25 * Math.pow(1.25, level)); }
   function wingsThrustMult(level) { return 1 + level * 0.16; }
   function wingsGravityMult(level) { return 1 - Math.min(level * 0.035, 0.35); }
   function trailTapValue(level) { return 1 + level; }
-  function engineAccel(level) { return level <= 0 ? 0 : 5 * Math.pow(1.42, level - 1); }
+  function engineAccel(level) { return level <= 0 ? 0 : 8 * Math.pow(1.5, level - 1); }
   function staminaMax(level) { return 100 * Math.pow(1.35, level); }
   function staminaRegenRate(level) { return staminaMax(level) * 0.12; }
 
@@ -335,7 +342,7 @@
   // real distance), so income keeps pace with the exponentially pricier upgrades
   function distanceRewardMult(distance) {
     const decades = Math.max(0, Math.log10(distance + 1) - 2);
-    return Math.pow(1.35, decades);
+    return Math.pow(1.5, decades);
   }
 
   state.stamina = staminaMax(state.staminaLevel);
@@ -384,6 +391,8 @@
   const staminaDescEl = document.getElementById("stamina-desc");
   const buyStaminaBtn = document.getElementById("buy-stamina");
   const staminaFillEl = document.getElementById("stamina-fill");
+  const fuelWrapEl = document.getElementById("fuel-wrap");
+  const fuelFillEl = document.getElementById("fuel-fill");
   const discRack = document.getElementById("disc-rack");
   const muteBtn = document.getElementById("mute-btn");
   const achievementListEl = document.getElementById("achievement-list");
@@ -412,8 +421,8 @@
     const eMaxed = eLevel >= ENGINE_MAX;
     engineLevelEl.textContent = eMaxed ? "MAX" : "Lv " + eLevel;
     engineDescEl.textContent = eLevel <= 0
-      ? "Passive thrust — keeps accelerating even when you're not tapping. This is the main way to reach light speed."
-      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust, always on`;
+      ? "Passive thrust — keeps accelerating even when you're not tapping. Runs on a 60s fuel tank that refuels automatically."
+      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust · 60s tank, ~${ENGINE_REFUEL_TIME}s to refuel`;
     setBuyState(buyEngineBtn, eMaxed, engineCost(eLevel));
 
     const sLevel = state.staminaLevel;
@@ -1410,11 +1419,26 @@
     state.t += dt;
 
     if (state.running && !state.paused) {
+      // engine fuel: a full tank runs the engine for ENGINE_FUEL_MAX seconds, then it
+      // cuts out and refuels over ENGINE_REFUEL_TIME seconds before resuming
+      let effEngineAccel = 0;
+      if (state.engineLevel > 0) {
+        if (!state.engineDepleted && state.engineFuel > 0) {
+          effEngineAccel = engineAccel(state.engineLevel);
+          state.engineFuel = Math.max(0, state.engineFuel - dt);
+          if (state.engineFuel <= 0) state.engineDepleted = true;
+        } else {
+          state.engineDepleted = true;
+          state.engineFuel = Math.min(ENGINE_FUEL_MAX, state.engineFuel + (ENGINE_FUEL_MAX / ENGINE_REFUEL_TIME) * dt);
+          if (state.engineFuel >= ENGINE_FUEL_MAX) state.engineDepleted = false;
+        }
+      }
+
       const normalGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
-      const outOfGas = state.exhausted && engineAccel(state.engineLevel) < normalGravity;
+      const outOfGas = state.exhausted && effEngineAccel < normalGravity;
       const fallMult = (state.velocity < 0 || outOfGas) ? FALL_GRAVITY_MULT : 1;
       const effGravity = normalGravity * fallMult;
-      state.velocity += (engineAccel(state.engineLevel) - effGravity) * dt;
+      state.velocity += (effEngineAccel - effGravity) * dt;
       state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
 
       const smaxNow = staminaMax(state.staminaLevel);
@@ -1491,6 +1515,13 @@
       staminaFillEl.style.width = staminaPct + "%";
       staminaFillEl.classList.toggle("low", staminaPct < 30 && staminaPct > 0);
       staminaFillEl.classList.toggle("empty", staminaPct <= 0);
+
+      if (state.engineLevel > 0) {
+        fuelWrapEl.classList.remove("hidden");
+        const fuelPct = clamp((state.engineFuel / ENGINE_FUEL_MAX) * 100, 0, 100);
+        fuelFillEl.style.width = fuelPct + "%";
+        fuelFillEl.classList.toggle("empty", state.engineDepleted);
+      }
 
       state.saveAccum += dt;
       if (state.saveAccum > 1) {
