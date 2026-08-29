@@ -18,7 +18,13 @@
       <span class="label">BEST</span>
       <span id="best-value">0 m</span>
     </div>
+    <div id="bank">
+      <span class="label">67s</span>
+      <span id="bank-value">0</span>
+    </div>
   </div>
+
+  <button id="menu-btn" title="Upgrades &amp; Music">☰</button>
 
   <div id="milestone"></div>
 
@@ -39,10 +45,56 @@
   <div id="start-screen">
     <h1>67 <span>CLICKER</span></h1>
     <p class="tagline">he's doing the six seven all the way to the galaxy</p>
-    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise.<br>Stop mashing and gravity brings you back down.</p>
-    <button id="start-btn">START</button>
+    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise.<br>Stop mashing and gravity brings you back down.<br>Every alternation earns 67s — spend them on wings and a trail.</p>
+    <div class="start-buttons">
+      <button id="start-btn">START</button>
+      <button id="shop-open-btn" class="secondary-btn">UPGRADES</button>
+    </div>
   </div>
 
+  <div id="shop-screen" class="hidden">
+    <div id="shop-panel">
+      <div id="shop-header">
+        <div id="shop-tabs">
+          <button class="shop-tab active" data-tab="upgrades">UPGRADES</button>
+          <button class="shop-tab" data-tab="music">MUSIC</button>
+        </div>
+        <div id="shop-bank">67s: <span id="shop-bank-value">0</span></div>
+        <button id="shop-close-btn">✕</button>
+      </div>
+
+      <div id="tab-upgrades" class="shop-tab-panel">
+        <div class="upgrade-card" id="card-wings">
+          <div class="upgrade-icon" id="icon-wings">🪽</div>
+          <div class="upgrade-info">
+            <div class="upgrade-title">Wings <span class="upgrade-level" id="wings-level">Lv 0</span></div>
+            <div class="upgrade-desc" id="wings-desc">More height per 67. Lighter landings.</div>
+          </div>
+          <button class="upgrade-buy" id="buy-wings">
+            <span id="wings-cost">20</span> 67s
+          </button>
+        </div>
+
+        <div class="upgrade-card" id="card-trail">
+          <div class="upgrade-icon" id="icon-trail">✨</div>
+          <div class="upgrade-info">
+            <div class="upgrade-title">Trail <span class="upgrade-level" id="trail-level">Lv 0</span></div>
+            <div class="upgrade-desc" id="trail-desc">More 67s counted per A/D press.</div>
+          </div>
+          <button class="upgrade-buy" id="buy-trail">
+            <span id="trail-cost">15</span> 67s
+          </button>
+        </div>
+      </div>
+
+      <div id="tab-music" class="shop-tab-panel hidden">
+        <div id="disc-rack"></div>
+        <button id="mute-btn">🔊 SOUND ON</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="audio.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

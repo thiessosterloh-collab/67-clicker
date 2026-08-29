@@ -42,48 +42,55 @@
   }
 
   // ---------- Game constants ----------
-  const GRAVITY = 620;         // units/s^2 pulling altitude down
-  const THRUST = 260;          // base impulse per valid alternation
-  const COMBO_BONUS = 26;      // extra thrust per combo step (capped)
-  const MAX_COMBO_BONUS_STEPS = 12;
-  const MAX_VELOCITY = 980;
-  const MIN_VELOCITY = -520;
-  const ALT_SCALE = 0.11;      // world->screen px per unit at reference zoom
-  const COMBO_WINDOW = 620;    // ms allowed between alternating presses
+  const GRAVITY = 780;          // units/s^2 pulling altitude down
+  const THRUST = 195;           // base impulse per valid alternation
+  const COMBO_BONUS = 22;       // extra thrust per combo step (capped)
+  const MAX_COMBO_BONUS_STEPS = 14;
+  const MAX_VELOCITY = 1050;
+  const MIN_VELOCITY = -560;
+  const ALT_SCALE = 0.11;       // world->screen px per unit at reference zoom
+  const COMBO_WINDOW = 540;     // ms allowed between alternating presses
+  const MAX_LEVEL = 10;
+  const MOON_ALT = 26000;
 
   const ZONES = [
-    { start: 0,     name: "city",     top: "#6ec6ff", bottom: "#eaf6ff" },
-    { start: 320,   name: "clouds",   top: "#4fa8e0", bottom: "#cfe9ff" },
-    { start: 950,   name: "planes",   top: "#1c6fb0", bottom: "#a9d8f5" },
-    { start: 2000,  name: "rockets",  top: "#0b3d6b", bottom: "#5c93c2" },
-    { start: 3600,  name: "edge",     top: "#041022", bottom: "#254a75" },
-    { start: 5200,  name: "moon",     top: "#000714", bottom: "#0f2038" },
-    { start: 8200,  name: "solar",    top: "#000000", bottom: "#08081a" },
-    { start: 19000, name: "galaxy",   top: "#050110", bottom: "#170a2e" },
+    { start: 0,      name: "city",     top: "#6ec6ff", bottom: "#eaf6ff" },
+    { start: 1600,   name: "clouds",   top: "#4fa8e0", bottom: "#cfe9ff" },
+    { start: 4750,   name: "planes",   top: "#1c6fb0", bottom: "#a9d8f5" },
+    { start: 10000,  name: "rockets",  top: "#0b3d6b", bottom: "#5c93c2" },
+    { start: 18000,  name: "edge",     top: "#041022", bottom: "#254a75" },
+    { start: 26000,  name: "moon",     top: "#000714", bottom: "#0f2038" },
+    { start: 41000,  name: "solar",    top: "#000000", bottom: "#08081a" },
+    { start: 110000, name: "galaxy",   top: "#050110", bottom: "#170a2e" },
   ];
 
   const MILESTONES = [
-    { at: 10,    text: "Liftoff! 6... 7..." },
-    { at: 320,   text: "Leaving the city..." },
-    { at: 950,   text: "Above the clouds — birds everywhere!" },
-    { at: 2000,  text: "Cruising altitude. Planes below!" },
-    { at: 3600,  text: "Rockets & satellites incoming!" },
-    { at: 5200,  text: "The Moon!" },
-    { at: 7200,  text: "Mars, dead ahead." },
-    { at: 9600,  text: "Jupiter looms." },
-    { at: 12200, text: "Saturn's rings!" },
-    { at: 14800, text: "Neptune — edge of the system." },
-    { at: 17200, text: "Leaving the Solar System..." },
-    { at: 19000, text: "The Galaxy." },
-    { at: 30000, text: "Deeper into the galaxy..." },
-    { at: 45000, text: "Still going. Six. Seven." },
+    { at: 50,     text: "Liftoff! 6... 7..." },
+    { at: 1600,   text: "Leaving the city..." },
+    { at: 4750,   text: "Above the clouds — birds everywhere!" },
+    { at: 10000,  text: "Cruising altitude. Planes below!" },
+    { at: 18000,  text: "Rockets & satellites incoming!" },
+    { at: 26000,  text: "The Moon!" },
+    { at: 38000,  text: "Mars, dead ahead." },
+    { at: 50000,  text: "Jupiter looms." },
+    { at: 62000,  text: "Saturn's rings!" },
+    { at: 74000,  text: "Uranus, tilted and cold." },
+    { at: 86000,  text: "Neptune — edge of the system." },
+    { at: 98000,  text: "Pluto. Still counts." },
+    { at: 104000, text: "Leaving the Solar System..." },
+    { at: 110000, text: "The Galaxy." },
+    { at: 140000, text: "Deeper into the galaxy..." },
+    { at: 180000, text: "Still going. Six. Seven." },
+    { at: 250000, text: "You are the myth now." },
   ];
 
   const PLANETS = [
-    { at: 7200,  r: 46, color: "#c1440e", ring: false, name: "mars" },
-    { at: 9600,  r: 100, color: "#d8b26a", ring: false, name: "jupiter" },
-    { at: 12200, r: 84, color: "#e3c98f", ring: true,  name: "saturn" },
-    { at: 14800, r: 60, color: "#4f7ecb", ring: false, name: "neptune" },
+    { at: 38000, r: 46,  color: "#c1440e", ring: false, name: "mars" },
+    { at: 50000, r: 100, color: "#d8b26a", ring: false, name: "jupiter" },
+    { at: 62000, r: 84,  color: "#e3c98f", ring: true,  name: "saturn" },
+    { at: 74000, r: 58,  color: "#7fd8d8", ring: false, name: "uranus" },
+    { at: 86000, r: 60,  color: "#4f7ecb", ring: false, name: "neptune" },
+    { at: 98000, r: 20,  color: "#c9b8a3", ring: false, name: "pluto" },
   ];
 
   // ---------- Decorative world objects (seeded, fixed) ----------
@@ -101,20 +108,20 @@
   }
 
   const clouds = [];
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 34; i++) {
     clouds.push({
       x: hash(i * 3.1) * 2000 - 500,
-      y: 150 + hash(i * 5.3) * 750,
+      y: 750 + hash(i * 5.3) * 3750,
       s: 0.6 + hash(i * 7.7) * 1.4,
       speed: 8 + hash(i * 2.1) * 14,
     });
   }
 
   const birds = [];
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 24; i++) {
     birds.push({
       x: hash(i * 9.3) * 2000 - 500,
-      y: 250 + hash(i * 4.1) * 650,
+      y: 1250 + hash(i * 4.1) * 3250,
       s: 0.7 + hash(i * 6.6) * 0.8,
       speed: 30 + hash(i * 3.3) * 40,
       phase: hash(i * 1.9) * 10,
@@ -122,10 +129,10 @@
   }
 
   const planes = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 12; i++) {
     planes.push({
       x: hash(i * 11.2) * 2200 - 600,
-      y: 1000 + hash(i * 8.4) * 900,
+      y: 5000 + hash(i * 8.4) * 4500,
       s: 0.8 + hash(i * 2.7) * 0.6,
       speed: 40 + hash(i * 5.5) * 30,
       dir: hash(i * 3.9) > 0.5 ? 1 : -1,
@@ -133,34 +140,42 @@
   }
 
   const rockets = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     rockets.push({
       x: hash(i * 13.1) * 900 - 300,
-      y: 2200 + hash(i * 6.2) * 1400,
+      y: 11000 + hash(i * 6.2) * 7000,
       s: 0.8 + hash(i * 4.4) * 0.6,
     });
   }
 
   const satellites = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     satellites.push({
       x: hash(i * 15.6) * 1400 - 400,
-      y: 2800 + hash(i * 9.9) * 1600,
+      y: 14000 + hash(i * 9.9) * 8000,
       s: 0.8 + hash(i * 1.2) * 0.7,
       speed: 15 + hash(i * 8.8) * 20,
     });
   }
 
-  // ---------- State ----------
-  const best0 = Number(localStorage.getItem("sixseven_best") || 0);
+  // ---------- Persistence ----------
+  function loadNum(key, fallback) {
+    const v = Number(localStorage.getItem(key));
+    return Number.isFinite(v) && v >= 0 ? v : fallback;
+  }
+
   const state = {
     altitude: 0,
     velocity: 0,
     lastKey: null,
     lastPressAt: 0,
     combo: 0,
-    best: best0,
+    best: loadNum("sixseven_best", 0),
+    bank: loadNum("sixseven_bank", 0),
+    wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, MAX_LEVEL),
+    trailLevel: clamp(loadNum("sixseven_trail", 0), 0, MAX_LEVEL),
     running: false,
+    paused: false,
     t: 0,
     milestoneIdx: 0,
     aDown: false,
@@ -170,32 +185,194 @@
     particles: [],
     bursts: [],
     landed: true,
+    trailEmitAccum: 0,
   };
+
+  function persistBank() { localStorage.setItem("sixseven_bank", String(Math.floor(state.bank))); }
+  function persistLevels() {
+    localStorage.setItem("sixseven_wings", String(state.wingsLevel));
+    localStorage.setItem("sixseven_trail", String(state.trailLevel));
+  }
+
+  function wingsCost(level) { return Math.round(20 * Math.pow(1.55, level)); }
+  function trailCost(level) { return Math.round(15 * Math.pow(1.5, level)); }
+  function wingsThrustMult(level) { return 1 + level * 0.16; }
+  function wingsGravityMult(level) { return 1 - Math.min(level * 0.035, 0.35); }
+  function trailTapValue(level) { return 1 + level; }
 
   function fmtAltitude(v) {
     if (v < 1000) return Math.floor(v) + " m";
-    if (v < 20000) return (v / 1000).toFixed(2) + " km";
-    if (v < 8200) return (v / 1000).toFixed(1) + " km";
-    if (v < 19000) return (v / 1000).toFixed(1) + " km — solar system";
-    const ly = (v - 19000) / 1200;
+    if (v < 41000) return (v / 1000).toFixed(2) + " km";
+    if (v < 110000) return (v / 1000).toFixed(1) + " km — solar system";
+    const ly = (v - 110000) / 6000;
     return ly.toFixed(2) + " ly — the galaxy";
   }
 
-  // ---------- Input ----------
+  // ---------- DOM ----------
   const altEl = document.getElementById("altitude-value");
   const bestEl = document.getElementById("best-value");
+  const bankEl = document.getElementById("bank-value");
+  const shopBankEl = document.getElementById("shop-bank-value");
   const milestoneEl = document.getElementById("milestone");
   const comboEl = document.getElementById("combo-display");
   const keyAEl = document.getElementById("key-a");
   const keyDEl = document.getElementById("key-d");
   const startScreen = document.getElementById("start-screen");
   const startBtn = document.getElementById("start-btn");
+  const shopOpenBtn = document.getElementById("shop-open-btn");
+  const shopScreen = document.getElementById("shop-screen");
+  const shopCloseBtn = document.getElementById("shop-close-btn");
+  const menuBtn = document.getElementById("menu-btn");
+  const wingsLevelEl = document.getElementById("wings-level");
+  const wingsDescEl = document.getElementById("wings-desc");
+  const wingsCostEl = document.getElementById("wings-cost");
+  const buyWingsBtn = document.getElementById("buy-wings");
+  const trailLevelEl = document.getElementById("trail-level");
+  const trailDescEl = document.getElementById("trail-desc");
+  const trailCostEl = document.getElementById("trail-cost");
+  const buyTrailBtn = document.getElementById("buy-trail");
+  const discRack = document.getElementById("disc-rack");
+  const muteBtn = document.getElementById("mute-btn");
 
+  function refreshBankDisplays() {
+    bankEl.textContent = Math.floor(state.bank);
+    shopBankEl.textContent = Math.floor(state.bank);
+  }
+
+  function refreshShopUI() {
+    refreshBankDisplays();
+
+    const wLevel = state.wingsLevel;
+    const wMaxed = wLevel >= MAX_LEVEL;
+    wingsLevelEl.textContent = wMaxed ? "MAX" : "Lv " + wLevel;
+    wingsDescEl.textContent = `+${Math.round((wingsThrustMult(wLevel) - 1) * 100)}% height per 67 · softer falls`;
+    if (wMaxed) {
+      buyWingsBtn.innerHTML = "MAXED";
+      buyWingsBtn.classList.add("maxed");
+      buyWingsBtn.disabled = true;
+    } else {
+      const cost = wingsCost(wLevel);
+      buyWingsBtn.innerHTML = `<span>${cost}</span> 67s`;
+      buyWingsBtn.classList.remove("maxed");
+      buyWingsBtn.disabled = state.bank < cost;
+    }
+
+    const tLevel = state.trailLevel;
+    const tMaxed = tLevel >= MAX_LEVEL;
+    trailLevelEl.textContent = tMaxed ? "MAX" : "Lv " + tLevel;
+    trailDescEl.textContent = `${trailTapValue(tLevel)} 67s earned per A/D press`;
+    if (tMaxed) {
+      buyTrailBtn.innerHTML = "MAXED";
+      buyTrailBtn.classList.add("maxed");
+      buyTrailBtn.disabled = true;
+    } else {
+      const cost = trailCost(tLevel);
+      buyTrailBtn.innerHTML = `<span>${cost}</span> 67s`;
+      buyTrailBtn.classList.remove("maxed");
+      buyTrailBtn.disabled = state.bank < cost;
+    }
+  }
+
+  function buyWings() {
+    if (state.wingsLevel >= MAX_LEVEL) return;
+    const cost = wingsCost(state.wingsLevel);
+    if (state.bank < cost) return;
+    state.bank -= cost;
+    state.wingsLevel++;
+    persistBank();
+    persistLevels();
+    Audio67.playPurchase();
+    refreshShopUI();
+  }
+
+  function buyTrail() {
+    if (state.trailLevel >= MAX_LEVEL) return;
+    const cost = trailCost(state.trailLevel);
+    if (state.bank < cost) return;
+    state.bank -= cost;
+    state.trailLevel++;
+    persistBank();
+    persistLevels();
+    Audio67.playPurchase();
+    refreshShopUI();
+  }
+
+  buyWingsBtn.addEventListener("click", buyWings);
+  buyTrailBtn.addEventListener("click", buyTrail);
+
+  // ---------- Shop / menu wiring ----------
+  let audioStarted = false;
+  function ensureAudioStarted() {
+    if (audioStarted) return;
+    audioStarted = true;
+    Audio67.startMusic();
+    updateMuteBtn();
+  }
+
+  function updateMuteBtn() {
+    muteBtn.textContent = Audio67.isMuted() ? "🔇 SOUND OFF" : "🔊 SOUND ON";
+  }
+
+  function populateDiscRack() {
+    discRack.innerHTML = "";
+    Audio67.getTracks().forEach((track) => {
+      const el = document.createElement("div");
+      el.className = "disc" + (track.id === Audio67.currentTrack() ? " active" : "");
+      el.dataset.id = track.id;
+      el.innerHTML = `<div class="disc-art"></div><div class="disc-name">${track.name}</div>`;
+      el.addEventListener("click", () => {
+        ensureAudioStarted();
+        Audio67.setTrack(track.id);
+        [...discRack.children].forEach((c) => c.classList.toggle("active", c.dataset.id === track.id));
+      });
+      discRack.appendChild(el);
+    });
+  }
+  populateDiscRack();
+  updateMuteBtn();
+
+  muteBtn.addEventListener("click", () => {
+    ensureAudioStarted();
+    Audio67.toggleMute();
+    updateMuteBtn();
+  });
+
+  function setShopTab(name) {
+    document.querySelectorAll(".shop-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+    document.getElementById("tab-upgrades").classList.toggle("hidden", name !== "upgrades");
+    document.getElementById("tab-music").classList.toggle("hidden", name !== "music");
+  }
+  document.querySelectorAll(".shop-tab").forEach((b) => {
+    b.addEventListener("click", () => setShopTab(b.dataset.tab));
+  });
+
+  function openShop(tab) {
+    ensureAudioStarted();
+    refreshShopUI();
+    setShopTab(tab || "upgrades");
+    shopScreen.classList.remove("hidden");
+    if (state.running) state.paused = true;
+  }
+  function closeShop() {
+    shopScreen.classList.add("hidden");
+    state.paused = false;
+  }
+
+  shopOpenBtn.addEventListener("click", () => openShop("upgrades"));
+  menuBtn.addEventListener("click", () => openShop("upgrades"));
+  shopCloseBtn.addEventListener("click", closeShop);
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !shopScreen.classList.contains("hidden")) closeShop();
+  });
+
+  // ---------- Input ----------
   function press(key) {
-    if (!state.running) return;
+    if (!state.running || state.paused) return;
     const now = performance.now();
     if (key === "a") { state.aDown = true; keyAEl.classList.add("active"); }
     if (key === "d") { state.dDown = true; keyDEl.classList.add("active"); }
+    Audio67.playTap(key);
 
     if (state.lastKey === null) {
       state.lastKey = key;
@@ -217,6 +394,10 @@
       state.tilt = key === "a" ? -1 : 1;
       applyThrust(1);
       spawnLabel(key);
+
+      state.bank += trailTapValue(state.trailLevel);
+      persistBank();
+      refreshBankDisplays();
     } else {
       // same key twice in a row: no thrust, breaks combo
       state.combo = 0;
@@ -231,10 +412,11 @@
 
   function applyThrust(mult) {
     const bonusSteps = Math.min(state.combo, MAX_COMBO_BONUS_STEPS);
-    const power = (THRUST + bonusSteps * COMBO_BONUS) * mult;
+    const power = (THRUST + bonusSteps * COMBO_BONUS) * mult * wingsThrustMult(state.wingsLevel);
     state.velocity = clamp(state.velocity + power, MIN_VELOCITY, MAX_VELOCITY);
     state.landed = false;
-    for (let i = 0; i < 6; i++) {
+    const count = 6 + state.trailLevel * 2;
+    for (let i = 0; i < count; i++) {
       state.particles.push({
         x: (hash(state.t * 13 + i) - 0.5) * 40,
         y: 0,
@@ -242,8 +424,18 @@
         vx: (hash(state.t * 3 + i) - 0.5) * 60,
         life: 0.5 + hash(i) * 0.3,
         age: 0,
+        color: trailColor(state.trailLevel, i),
+        size: 3 + Math.min(state.trailLevel, 6) * 0.3,
       });
     }
+  }
+
+  function trailColor(level, seed) {
+    if (level <= 0) return "#5dd8ff";
+    if (level <= 2) return seed % 2 === 0 ? "#5dd8ff" : "#ff5da2";
+    if (level <= 4) return hash(seed + level) > 0.5 ? "#eafcff" : "#5dd8ff";
+    const hue = (state.t * 140 + seed * 47) % 360;
+    return `hsl(${hue}, 90%, 65%)`;
   }
 
   function spawnLabel(key) {
@@ -287,6 +479,7 @@
   startBtn.addEventListener("click", startGame);
 
   function startGame() {
+    ensureAudioStarted();
     if (state.running) return;
     state.running = true;
     startScreen.classList.add("hidden");
@@ -306,6 +499,7 @@
   function showMilestone(text) {
     milestoneEl.textContent = text;
     milestoneEl.classList.add("show");
+    Audio67.playMilestone();
     clearTimeout(milestoneTimer);
     milestoneTimer = setTimeout(() => milestoneEl.classList.remove("show"), 2600);
   }
@@ -342,7 +536,7 @@
   }
 
   function starOpacity(altitude) {
-    return clamp((altitude - 2600) / 3000, 0, 1);
+    return clamp((altitude - 13000) / 15000, 0, 1);
   }
 
   function drawStars(altitude, t) {
@@ -374,7 +568,7 @@
   }
 
   function drawGalaxySwirl(altitude, t) {
-    const op = clamp((altitude - 17000) / 4000, 0, 1);
+    const op = clamp((altitude - 100000) / 20000, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op * 0.9;
@@ -398,7 +592,7 @@
   }
 
   function drawBuildings(altitude) {
-    const op = clamp(1 - altitude / 500, 0, 1);
+    const op = clamp(1 - altitude / 2500, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op;
@@ -419,7 +613,7 @@
   }
 
   function drawCloudsAndBirds(altitude, t) {
-    const op = clamp(1 - (altitude - 300) / 1600, 0.05, 1) * clamp(altitude / 60, 0, 1);
+    const op = clamp(1 - (altitude - 1500) / 8000, 0.05, 1) * clamp(altitude / 300, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = Math.min(op, 1);
@@ -451,7 +645,7 @@
   }
 
   function drawPlanes(altitude, t) {
-    const op = clamp(1 - Math.abs(altitude - 1400) / 2200, 0, 1);
+    const op = clamp(1 - Math.abs(altitude - 7000) / 11000, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op;
@@ -488,7 +682,7 @@
   }
 
   function drawRockets(altitude) {
-    const op = clamp(1 - Math.abs(altitude - 3000) / 2600, 0, 1);
+    const op = clamp(1 - Math.abs(altitude - 14000) / 13000, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op;
@@ -533,7 +727,7 @@
   }
 
   function drawSatellites(altitude, t) {
-    const op = clamp(1 - Math.abs(altitude - 3600) / 3000, 0, 1);
+    const op = clamp(1 - Math.abs(altitude - 18000) / 15000, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op;
@@ -557,9 +751,9 @@
   }
 
   function drawMoon(altitude) {
-    const op = clamp(1 - Math.abs(altitude - 5200) / 3500, 0, 1);
+    const op = clamp(1 - Math.abs(altitude - MOON_ALT) / 17500, 0, 1);
     if (op <= 0) return;
-    const sy = worldToScreenY(5200, altitude, 0.5);
+    const sy = worldToScreenY(MOON_ALT, altitude, 0.5);
     ctx.save();
     ctx.globalAlpha = op;
     const r = 130;
@@ -581,7 +775,7 @@
 
   function drawPlanets(altitude) {
     for (const p of PLANETS) {
-      const op = clamp(1 - Math.abs(altitude - p.at) / 1000, 0, 1);
+      const op = clamp(1 - Math.abs(altitude - p.at) / 5000, 0, 1);
       if (op <= 0) continue;
       const sy = worldToScreenY(p.at, altitude, 0.6);
       const sx = W * (0.3 + 0.4 * hash(p.at));
@@ -607,6 +801,62 @@
   }
 
   // ---------- Player ----------
+  function drawWings(level, t) {
+    if (level <= 0) return;
+    const size = 22 + level * 3.6;
+    const flap = Math.sin(t * 5 + state.kickPhase * 0.3) * (6 + level);
+    const tier = level >= 8 ? 3 : level >= 5 ? 2 : level >= 3 ? 1 : 0;
+    const palettes = [
+      ["#e8e8ec", "#c9c9d2"],
+      ["#fff3d0", "#ffd76a"],
+      ["#bff2ff", "#5dd8ff"],
+      ["#ffe3fb", "#ff5da2"],
+    ];
+    const [light, dark] = palettes[tier];
+
+    ctx.save();
+    if (tier >= 2) {
+      ctx.shadowColor = dark;
+      ctx.shadowBlur = 18 + tier * 6;
+    }
+
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.scale(side, 1);
+      ctx.translate(6, 2);
+      ctx.rotate(-0.3 + flap * 0.012);
+      const grad = ctx.createLinearGradient(0, 0, size, size * 0.6);
+      if (tier === 3) {
+        grad.addColorStop(0, `hsl(${(t * 60) % 360},90%,75%)`);
+        grad.addColorStop(1, `hsl(${(t * 60 + 80) % 360},90%,60%)`);
+      } else {
+        grad.addColorStop(0, light);
+        grad.addColorStop(1, dark);
+      }
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(size * 0.5, -size * 0.35, size, size * 0.15);
+      ctx.quadraticCurveTo(size * 0.55, size * 0.1, size * 0.4, size * 0.55);
+      ctx.quadraticCurveTo(size * 0.15, size * 0.3, 0, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      const feathers = 3 + Math.min(level, 5);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= feathers; i++) {
+        const f = i / (feathers + 1);
+        ctx.beginPath();
+        ctx.moveTo(size * 0.15 * f, size * 0.05 * f);
+        ctx.lineTo(size * (0.3 + f * 0.6), size * (0.1 + f * 0.35));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   function drawPlayer(t) {
     const cx = W / 2;
     const cy = H * CENTER_Y_FRAC;
@@ -616,6 +866,8 @@
     ctx.save();
     ctx.translate(cx, cy + bob);
     ctx.rotate(tiltAngle * 0.3);
+
+    drawWings(state.wingsLevel, t);
 
     // legs (flutter kick)
     const kick = Math.sin(state.kickPhase) * (state.landed ? 4 : 16);
@@ -686,14 +938,14 @@
       ctx.restore();
     }
 
-    // thrust particles
+    // thrust / trail particles
     ctx.save();
     for (const pt of state.particles) {
       const p2 = pt.age / pt.life;
-      ctx.globalAlpha = (1 - p2) * 0.7;
-      ctx.fillStyle = "#5dd8ff";
+      ctx.globalAlpha = (1 - p2) * 0.75;
+      ctx.fillStyle = pt.color || "#5dd8ff";
       ctx.beginPath();
-      ctx.arc(cx + pt.x + pt.vx * pt.age, cy + 40 + pt.y + pt.vy * pt.age, 3 * (1 - p2), 0, Math.PI * 2);
+      ctx.arc(cx + pt.x + pt.vx * pt.age, cy + 40 + pt.y + pt.vy * pt.age, (pt.size || 3) * (1 - p2), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -707,13 +959,16 @@
     lastTime = now;
     state.t += dt;
 
-    if (state.running) {
-      state.velocity -= GRAVITY * dt;
+    if (state.running && !state.paused) {
+      const effGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
+      state.velocity -= effGravity * dt;
       state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
+      const wasAirborne = state.altitude > 0;
       state.altitude += state.velocity * dt;
       if (state.altitude <= 0) {
         state.altitude = 0;
         state.velocity = 0;
+        if (wasAirborne && !state.landed) Audio67.playLand();
         state.landed = true;
       }
       if (state.velocity <= 0 && state.altitude <= 0) state.combo = 0;
@@ -729,6 +984,25 @@
       // combo decays if too slow
       if (state.lastKey && now - state.lastPressAt > COMBO_WINDOW * 1.4) {
         state.combo = 0;
+      }
+
+      // passive contrail at high trail levels
+      if (state.trailLevel >= 6 && !state.landed) {
+        state.trailEmitAccum += dt;
+        const interval = 0.05;
+        while (state.trailEmitAccum > interval) {
+          state.trailEmitAccum -= interval;
+          state.particles.push({
+            x: (hash(state.t * 29) - 0.5) * 20,
+            y: 0,
+            vy: 40 + hash(state.t * 17) * 40,
+            vx: (hash(state.t * 11) - 0.5) * 20,
+            life: 0.4,
+            age: 0,
+            color: trailColor(state.trailLevel, Math.floor(state.t * 40)),
+            size: 2.4,
+          });
+        }
       }
 
       checkMilestones();
@@ -760,5 +1034,6 @@
 
   altEl.textContent = fmtAltitude(0);
   bestEl.textContent = fmtAltitude(state.best);
+  refreshBankDisplays();
   requestAnimationFrame(frame);
 })();
