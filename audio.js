@@ -64,6 +64,22 @@ const Audio67 = (() => {
     ["C5", "E5", "G5"].forEach((n, i) => blip(noteFreq(n), 0.22, "square", 0.7, t0 + i * 0.07));
   }
 
+  function playAchievement() {
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(80, t0);
+    g.gain.setValueAtTime(0.6, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
+    osc.connect(g);
+    g.connect(sfxGain);
+    osc.start(t0);
+    osc.stop(t0 + 0.5);
+    ["C5", "E5", "G5", "C6", "E6"].forEach((n, i) => blip(noteFreq(n), 0.35, "square", 0.75, t0 + i * 0.09));
+  }
+
   function playPurchase() {
     if (!ctx) return;
     const t0 = ctx.currentTime;
@@ -268,6 +284,7 @@ const Audio67 = (() => {
     startMusic,
     playTap,
     playMilestone,
+    playAchievement,
     playPurchase,
     playLand,
     setTrack,

@@ -11,8 +11,12 @@
 
   <div id="hud">
     <div id="altitude">
-      <span class="label">ALTITUDE</span>
+      <span class="label">DISTANCE</span>
       <span id="altitude-value">0 m</span>
+    </div>
+    <div id="speed">
+      <span class="label">SPEED</span>
+      <span id="speed-value">0 m/s</span>
     </div>
     <div id="best">
       <span class="label">BEST</span>
@@ -24,7 +28,7 @@
     </div>
   </div>
 
-  <button id="menu-btn" title="Upgrades &amp; Music">☰</button>
+  <button id="menu-btn" title="Upgrades, Achievements &amp; Music">☰</button>
 
   <div id="milestone"></div>
 
@@ -44,8 +48,8 @@
 
   <div id="start-screen">
     <h1>67 <span>CLICKER</span></h1>
-    <p class="tagline">he's doing the six seven all the way to the galaxy</p>
-    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise.<br>Stop mashing and gravity brings you back down.<br>Every alternation earns 67s — spend them on wings and a trail.</p>
+    <p class="tagline">he's doing the six seven all the way to the galaxy — for real this time</p>
+    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise.<br>Every real meter, every real m/s counts — from the Kármán line to light speed and beyond.<br>Buy an Engine and you'll climb even while you're not tapping.</p>
     <div class="start-buttons">
       <button id="start-btn">START</button>
       <button id="shop-open-btn" class="secondary-btn">UPGRADES</button>
@@ -57,6 +61,7 @@
       <div id="shop-header">
         <div id="shop-tabs">
           <button class="shop-tab active" data-tab="upgrades">UPGRADES</button>
+          <button class="shop-tab" data-tab="achievements">ACHIEVEMENTS</button>
           <button class="shop-tab" data-tab="music">MUSIC</button>
         </div>
         <div id="shop-bank">67s: <span id="shop-bank-value">0</span></div>
@@ -64,11 +69,22 @@
       </div>
 
       <div id="tab-upgrades" class="shop-tab-panel">
+        <div class="upgrade-card" id="card-engine">
+          <div class="upgrade-icon" id="icon-engine">🚀</div>
+          <div class="upgrade-info">
+            <div class="upgrade-title">Engine <span class="upgrade-level" id="engine-level">Lv 0</span></div>
+            <div class="upgrade-desc" id="engine-desc">Passive thrust — keeps accelerating even when you're not tapping. This is the main way to reach light speed.</div>
+          </div>
+          <button class="upgrade-buy" id="buy-engine">
+            <span id="engine-cost">30</span> 67s
+          </button>
+        </div>
+
         <div class="upgrade-card" id="card-wings">
           <div class="upgrade-icon" id="icon-wings">🪽</div>
           <div class="upgrade-info">
             <div class="upgrade-title">Wings <span class="upgrade-level" id="wings-level">Lv 0</span></div>
-            <div class="upgrade-desc" id="wings-desc">More height per 67. Lighter landings.</div>
+            <div class="upgrade-desc" id="wings-desc">More thrust per 67. Lighter landings.</div>
           </div>
           <button class="upgrade-buy" id="buy-wings">
             <span id="wings-cost">20</span> 67s
@@ -85,6 +101,10 @@
             <span id="trail-cost">15</span> 67s
           </button>
         </div>
+      </div>
+
+      <div id="tab-achievements" class="shop-tab-panel hidden">
+        <div id="achievement-list"></div>
       </div>
 
       <div id="tab-music" class="shop-tab-panel hidden">

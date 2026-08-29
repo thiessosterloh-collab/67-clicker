@@ -41,59 +41,97 @@
     return x - Math.floor(x);
   }
 
-  // ---------- Game constants ----------
-  const GRAVITY = 780;          // units/s^2 pulling altitude down
-  const THRUST = 195;           // base impulse per valid alternation
-  const COMBO_BONUS = 22;       // extra thrust per combo step (capped)
-  const MAX_COMBO_BONUS_STEPS = 14;
-  const MAX_VELOCITY = 1050;
-  const MIN_VELOCITY = -560;
-  const ALT_SCALE = 0.11;       // world->screen px per unit at reference zoom
-  const COMBO_WINDOW = 540;     // ms allowed between alternating presses
-  const MAX_LEVEL = 10;
-  const MOON_ALT = 26000;
+  // ---------- Real-world constants ----------
+  const C = 299792458;              // speed of light, m/s
+  const AU = 149597870700;          // astronomical unit, m
+  const LY = 9.4607304725808e15;    // light-year, m
+  const GRAVITY = 9.81;             // real Earth gravity, m/s^2
+
+  // ---------- Game tuning ----------
+  const TAP_IMPULSE_BASE = 4;       // m/s per valid alternation
+  const COMBO_BONUS = 0.6;          // extra m/s per combo step
+  const MAX_COMBO_BONUS_STEPS = 20;
+  const MAX_VELOCITY = 1e13;        // safety ceiling (~33,000c), practically unbounded
+  const MIN_VELOCITY = -400;
+  const COMBO_WINDOW = 520;         // ms allowed between alternating presses
+  const IDLE_CURRENCY_RATE = 0.0025; // 67s per m/s of velocity per second
+
+  const WINGS_MAX = 10;
+  const TRAIL_MAX = 10;
+  const ENGINE_MAX = 500;
+
+  // ---------- Real-world distances (meters) ----------
+  const KARMAN = 100000;            // edge of space
+  const ISS = 400000;               // low Earth orbit
+  const MOON = 384400000;           // 384,400 km
+  const MARS = 2.25e11;
+  const JUPITER = 6.287e11;
+  const SATURN = 1.28e12;
+  const URANUS = 2.72e12;
+  const NEPTUNE = 4.35e12;
+  const PLUTO = 5.9e12;
+  const HELIOPAUSE = 1.8e13;        // ~120 AU, Voyager 1 territory
+  const PROXIMA = 4.0e16;           // ~4.24 ly, nearest star
+  const GALACTIC_CENTER = 2.46e20;  // ~26,000 ly
+  const ANDROMEDA = 2.4e22;         // ~2.5 million ly
 
   const ZONES = [
-    { start: 0,      name: "city",     top: "#6ec6ff", bottom: "#eaf6ff" },
-    { start: 1600,   name: "clouds",   top: "#4fa8e0", bottom: "#cfe9ff" },
-    { start: 4750,   name: "planes",   top: "#1c6fb0", bottom: "#a9d8f5" },
-    { start: 10000,  name: "rockets",  top: "#0b3d6b", bottom: "#5c93c2" },
-    { start: 18000,  name: "edge",     top: "#041022", bottom: "#254a75" },
-    { start: 26000,  name: "moon",     top: "#000714", bottom: "#0f2038" },
-    { start: 41000,  name: "solar",    top: "#000000", bottom: "#08081a" },
-    { start: 110000, name: "galaxy",   top: "#050110", bottom: "#170a2e" },
+    { start: 0,               top: "#6ec6ff", bottom: "#eaf6ff" }, // city
+    { start: 2000,            top: "#4fa8e0", bottom: "#cfe9ff" }, // clouds
+    { start: 9000,            top: "#1c6fb0", bottom: "#a9d8f5" }, // planes cruise
+    { start: 50000,           top: "#0b3d6b", bottom: "#5c93c2" }, // stratosphere / rockets
+    { start: KARMAN,          top: "#020814", bottom: "#16324f" }, // Karman line — edge of space
+    { start: 2000000,         top: "#000000", bottom: "#050818" }, // deep space transit
+    { start: 6e12,            top: "#000000", bottom: "#05040d" }, // outer solar system
+    { start: HELIOPAUSE,      top: "#020103", bottom: "#0c0518" }, // interstellar
+    { start: GALACTIC_CENTER, top: "#050110", bottom: "#170a2e" }, // galactic core
   ];
 
   const MILESTONES = [
-    { at: 50,     text: "Liftoff! 6... 7..." },
-    { at: 1600,   text: "Leaving the city..." },
-    { at: 4750,   text: "Above the clouds — birds everywhere!" },
-    { at: 10000,  text: "Cruising altitude. Planes below!" },
-    { at: 18000,  text: "Rockets & satellites incoming!" },
-    { at: 26000,  text: "The Moon!" },
-    { at: 38000,  text: "Mars, dead ahead." },
-    { at: 50000,  text: "Jupiter looms." },
-    { at: 62000,  text: "Saturn's rings!" },
-    { at: 74000,  text: "Uranus, tilted and cold." },
-    { at: 86000,  text: "Neptune — edge of the system." },
-    { at: 98000,  text: "Pluto. Still counts." },
-    { at: 104000, text: "Leaving the Solar System..." },
-    { at: 110000, text: "The Galaxy." },
-    { at: 140000, text: "Deeper into the galaxy..." },
-    { at: 180000, text: "Still going. Six. Seven." },
-    { at: 250000, text: "You are the myth now." },
+    { at: 50,               text: "Liftoff! 6... 7..." },
+    { at: 2000,             text: "Leaving the city..." },
+    { at: 9000,             text: "Cruising altitude — planes below!" },
+    { at: KARMAN,           text: "The Kármán Line — official edge of space!" },
+    { at: ISS,              text: "ISS altitude — satellites all around." },
+    { at: MOON,             text: "The Moon! 384,400 km from home." },
+    { at: MARS,             text: "Mars, dead ahead." },
+    { at: JUPITER,          text: "Jupiter looms." },
+    { at: SATURN,           text: "Saturn's rings!" },
+    { at: URANUS,           text: "Uranus, tilted and cold." },
+    { at: NEPTUNE,          text: "Neptune — edge of the known planets." },
+    { at: PLUTO,            text: "Pluto. Still counts." },
+    { at: HELIOPAUSE,       text: "The Heliopause — leaving the Sun's influence." },
+    { at: PROXIMA,          text: "Proxima Centauri — the nearest star." },
+    { at: GALACTIC_CENTER,  text: "The Galactic Center. You are basically a myth now." },
+    { at: ANDROMEDA,        text: "Andromeda. Okay, now you're just showing off." },
   ];
 
-  const PLANETS = [
-    { at: 38000, r: 46,  color: "#c1440e", ring: false, name: "mars" },
-    { at: 50000, r: 100, color: "#d8b26a", ring: false, name: "jupiter" },
-    { at: 62000, r: 84,  color: "#e3c98f", ring: true,  name: "saturn" },
-    { at: 74000, r: 58,  color: "#7fd8d8", ring: false, name: "uranus" },
-    { at: 86000, r: 60,  color: "#4f7ecb", ring: false, name: "neptune" },
-    { at: 98000, r: 20,  color: "#c9b8a3", ring: false, name: "pluto" },
+  const LANDMARKS = [
+    { at: MOON,           r: 130, color: "#b9b6ad", type: "moon" },
+    { at: MARS,           r: 46,  color: "#c1440e", type: "planet" },
+    { at: JUPITER,        r: 100, color: "#d8b26a", type: "planet" },
+    { at: SATURN,         r: 84,  color: "#e3c98f", type: "planet", ring: true },
+    { at: URANUS,         r: 58,  color: "#7fd8d8", type: "planet" },
+    { at: NEPTUNE,        r: 60,  color: "#4f7ecb", type: "planet" },
+    { at: PLUTO,          r: 20,  color: "#c9b8a3", type: "planet" },
+    { at: PROXIMA,        r: 70,  color: "#ffe9d0", type: "star" },
+    { at: GALACTIC_CENTER, r: 140, color: "#fff3d0", type: "core" },
+    { at: ANDROMEDA,      r: 90,  color: "#c9c8ff", type: "galaxy" },
   ];
 
-  // ---------- Decorative world objects (seeded, fixed) ----------
+  // ---------- Achievements (velocity thresholds, m/s) ----------
+  const ACHIEVEMENTS = [
+    { id: "mach1",    v: 343,          name: "Mach 1",                        desc: "Broke the sound barrier." },
+    { id: "escape",   v: 11200,        name: "Escape Velocity",               desc: "Faster than Earth's escape velocity — gravity can't hold you." },
+    { id: "onepct",   v: 0.01 * C,     name: "1% Light Speed",                desc: "Now we're getting relativistic." },
+    { id: "halfc",    v: 0.5 * C,      name: "Half Light Speed",              desc: "Halfway to being made of pure energy." },
+    { id: "c",        v: C,            name: "LIGHT SPEED",                   desc: "Einstein is furious right now." },
+    { id: "10c",      v: 10 * C,       name: "Ludicrous Speed",               desc: "Ten times light speed. Physics has left the chat." },
+    { id: "100c",     v: 100 * C,      name: "Faster Than Light, Casually",   desc: "One hundred light speeds. No big deal." },
+    { id: "1000c",    v: 1000 * C,     name: "Tachyon Certified",             desc: "One thousand times light speed." },
+  ];
+
+  // ---------- Decorative world objects (seeded, fixed, real-ish altitude bands) ----------
   const buildings = [];
   {
     let x = -40;
@@ -111,7 +149,7 @@
   for (let i = 0; i < 34; i++) {
     clouds.push({
       x: hash(i * 3.1) * 2000 - 500,
-      y: 750 + hash(i * 5.3) * 3750,
+      y: 500 + hash(i * 5.3) * 8500,
       s: 0.6 + hash(i * 7.7) * 1.4,
       speed: 8 + hash(i * 2.1) * 14,
     });
@@ -121,7 +159,7 @@
   for (let i = 0; i < 24; i++) {
     birds.push({
       x: hash(i * 9.3) * 2000 - 500,
-      y: 1250 + hash(i * 4.1) * 3250,
+      y: 300 + hash(i * 4.1) * 5000,
       s: 0.7 + hash(i * 6.6) * 0.8,
       speed: 30 + hash(i * 3.3) * 40,
       phase: hash(i * 1.9) * 10,
@@ -132,7 +170,7 @@
   for (let i = 0; i < 12; i++) {
     planes.push({
       x: hash(i * 11.2) * 2200 - 600,
-      y: 5000 + hash(i * 8.4) * 4500,
+      y: 9000 + hash(i * 8.4) * 3000,
       s: 0.8 + hash(i * 2.7) * 0.6,
       speed: 40 + hash(i * 5.5) * 30,
       dir: hash(i * 3.9) > 0.5 ? 1 : -1,
@@ -143,7 +181,7 @@
   for (let i = 0; i < 8; i++) {
     rockets.push({
       x: hash(i * 13.1) * 900 - 300,
-      y: 11000 + hash(i * 6.2) * 7000,
+      y: 20000 + hash(i * 6.2) * 70000,
       s: 0.8 + hash(i * 4.4) * 0.6,
     });
   }
@@ -152,7 +190,7 @@
   for (let i = 0; i < 8; i++) {
     satellites.push({
       x: hash(i * 15.6) * 1400 - 400,
-      y: 14000 + hash(i * 9.9) * 8000,
+      y: 300000 + hash(i * 9.9) * 1700000,
       s: 0.8 + hash(i * 1.2) * 0.7,
       speed: 15 + hash(i * 8.8) * 20,
     });
@@ -163,6 +201,18 @@
     const v = Number(localStorage.getItem(key));
     return Number.isFinite(v) && v >= 0 ? v : fallback;
   }
+  function loadSet(key) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(key) || "[]");
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  const hadPreviousSession = localStorage.getItem("sixseven_lastseen") != null;
+  const lastSeen = loadNum("sixseven_lastseen", 0);
+  const lastVelocity = loadNum("sixseven_lastvelocity", 0);
 
   const state = {
     altitude: 0,
@@ -172,8 +222,10 @@
     combo: 0,
     best: loadNum("sixseven_best", 0),
     bank: loadNum("sixseven_bank", 0),
-    wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, MAX_LEVEL),
-    trailLevel: clamp(loadNum("sixseven_trail", 0), 0, MAX_LEVEL),
+    wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, WINGS_MAX),
+    trailLevel: clamp(loadNum("sixseven_trail", 0), 0, TRAIL_MAX),
+    engineLevel: clamp(loadNum("sixseven_engine", 0), 0, ENGINE_MAX),
+    achievements: loadSet("sixseven_achievements"),
     running: false,
     paused: false,
     t: 0,
@@ -186,30 +238,57 @@
     bursts: [],
     landed: true,
     trailEmitAccum: 0,
+    saveAccum: 0,
   };
+
+  // grant offline idle earnings from accumulated velocity while the tab was closed
+  if (hadPreviousSession && lastVelocity > 0) {
+    const elapsed = clamp((Date.now() - lastSeen) / 1000, 0, 6 * 3600);
+    const gain = elapsed * lastVelocity * IDLE_CURRENCY_RATE;
+    if (gain > 1) {
+      state.bank += gain;
+      state.pendingWelcomeBack = Math.floor(gain);
+    }
+  }
 
   function persistBank() { localStorage.setItem("sixseven_bank", String(Math.floor(state.bank))); }
   function persistLevels() {
     localStorage.setItem("sixseven_wings", String(state.wingsLevel));
     localStorage.setItem("sixseven_trail", String(state.trailLevel));
+    localStorage.setItem("sixseven_engine", String(state.engineLevel));
   }
+  function persistSession() {
+    localStorage.setItem("sixseven_lastseen", String(Date.now()));
+    localStorage.setItem("sixseven_lastvelocity", String(Math.max(state.velocity, 0)));
+  }
+  window.addEventListener("beforeunload", persistSession);
 
   function wingsCost(level) { return Math.round(20 * Math.pow(1.55, level)); }
   function trailCost(level) { return Math.round(15 * Math.pow(1.5, level)); }
+  function engineCost(level) { return Math.round(30 * Math.pow(1.28, level)); }
   function wingsThrustMult(level) { return 1 + level * 0.16; }
   function wingsGravityMult(level) { return 1 - Math.min(level * 0.035, 0.35); }
   function trailTapValue(level) { return 1 + level; }
+  function engineAccel(level) { return level <= 0 ? 0 : 5 * Math.pow(1.42, level - 1); }
 
-  function fmtAltitude(v) {
-    if (v < 1000) return Math.floor(v) + " m";
-    if (v < 41000) return (v / 1000).toFixed(2) + " km";
-    if (v < 110000) return (v / 1000).toFixed(1) + " km — solar system";
-    const ly = (v - 110000) / 6000;
-    return ly.toFixed(2) + " ly — the galaxy";
+  function fmtDistance(m) {
+    if (m < 1000) return Math.floor(m) + " m";
+    if (m < 1e6) return (m / 1000).toFixed(2) + " km";
+    if (m < 0.1 * AU) return Math.round(m / 1000).toLocaleString() + " km";
+    if (m < LY) return (m / AU).toFixed(2) + " AU";
+    return (m / LY).toFixed(3) + " ly";
+  }
+
+  function fmtVelocity(v) {
+    const av = Math.abs(v);
+    if (av >= 0.01 * C) return (v / C).toFixed(av >= C ? 2 : 4) + "c";
+    if (av >= 340) return (v / 340).toFixed(2) + " Mach";
+    return Math.round(v) + " m/s";
   }
 
   // ---------- DOM ----------
   const altEl = document.getElementById("altitude-value");
+  const speedEl = document.getElementById("speed-value");
   const bestEl = document.getElementById("best-value");
   const bankEl = document.getElementById("bank-value");
   const shopBankEl = document.getElementById("shop-bank-value");
@@ -225,56 +304,62 @@
   const menuBtn = document.getElementById("menu-btn");
   const wingsLevelEl = document.getElementById("wings-level");
   const wingsDescEl = document.getElementById("wings-desc");
-  const wingsCostEl = document.getElementById("wings-cost");
   const buyWingsBtn = document.getElementById("buy-wings");
   const trailLevelEl = document.getElementById("trail-level");
   const trailDescEl = document.getElementById("trail-desc");
-  const trailCostEl = document.getElementById("trail-cost");
   const buyTrailBtn = document.getElementById("buy-trail");
+  const engineLevelEl = document.getElementById("engine-level");
+  const engineDescEl = document.getElementById("engine-desc");
+  const buyEngineBtn = document.getElementById("buy-engine");
   const discRack = document.getElementById("disc-rack");
   const muteBtn = document.getElementById("mute-btn");
+  const achievementListEl = document.getElementById("achievement-list");
 
   function refreshBankDisplays() {
-    bankEl.textContent = Math.floor(state.bank);
-    shopBankEl.textContent = Math.floor(state.bank);
+    bankEl.textContent = Math.floor(state.bank).toLocaleString();
+    shopBankEl.textContent = Math.floor(state.bank).toLocaleString();
   }
 
   function refreshShopUI() {
     refreshBankDisplays();
 
     const wLevel = state.wingsLevel;
-    const wMaxed = wLevel >= MAX_LEVEL;
+    const wMaxed = wLevel >= WINGS_MAX;
     wingsLevelEl.textContent = wMaxed ? "MAX" : "Lv " + wLevel;
-    wingsDescEl.textContent = `+${Math.round((wingsThrustMult(wLevel) - 1) * 100)}% height per 67 · softer falls`;
-    if (wMaxed) {
-      buyWingsBtn.innerHTML = "MAXED";
-      buyWingsBtn.classList.add("maxed");
-      buyWingsBtn.disabled = true;
-    } else {
-      const cost = wingsCost(wLevel);
-      buyWingsBtn.innerHTML = `<span>${cost}</span> 67s`;
-      buyWingsBtn.classList.remove("maxed");
-      buyWingsBtn.disabled = state.bank < cost;
-    }
+    wingsDescEl.textContent = `+${Math.round((wingsThrustMult(wLevel) - 1) * 100)}% thrust per 67 · softer falls`;
+    setBuyState(buyWingsBtn, wMaxed, wingsCost(wLevel));
 
     const tLevel = state.trailLevel;
-    const tMaxed = tLevel >= MAX_LEVEL;
+    const tMaxed = tLevel >= TRAIL_MAX;
     trailLevelEl.textContent = tMaxed ? "MAX" : "Lv " + tLevel;
     trailDescEl.textContent = `${trailTapValue(tLevel)} 67s earned per A/D press`;
-    if (tMaxed) {
-      buyTrailBtn.innerHTML = "MAXED";
-      buyTrailBtn.classList.add("maxed");
-      buyTrailBtn.disabled = true;
+    setBuyState(buyTrailBtn, tMaxed, trailCost(tLevel));
+
+    const eLevel = state.engineLevel;
+    const eMaxed = eLevel >= ENGINE_MAX;
+    engineLevelEl.textContent = eMaxed ? "MAX" : "Lv " + eLevel;
+    engineDescEl.textContent = eLevel <= 0
+      ? "Passive thrust — keeps accelerating even when you're not tapping. This is the main way to reach light speed."
+      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust, always on`;
+    setBuyState(buyEngineBtn, eMaxed, engineCost(eLevel));
+
+    refreshAchievementsUI();
+  }
+
+  function setBuyState(btn, maxed, cost) {
+    if (maxed) {
+      btn.innerHTML = "MAXED";
+      btn.classList.add("maxed");
+      btn.disabled = true;
     } else {
-      const cost = trailCost(tLevel);
-      buyTrailBtn.innerHTML = `<span>${cost}</span> 67s`;
-      buyTrailBtn.classList.remove("maxed");
-      buyTrailBtn.disabled = state.bank < cost;
+      btn.innerHTML = `<span>${cost.toLocaleString()}</span> 67s`;
+      btn.classList.remove("maxed");
+      btn.disabled = state.bank < cost;
     }
   }
 
   function buyWings() {
-    if (state.wingsLevel >= MAX_LEVEL) return;
+    if (state.wingsLevel >= WINGS_MAX) return;
     const cost = wingsCost(state.wingsLevel);
     if (state.bank < cost) return;
     state.bank -= cost;
@@ -286,7 +371,7 @@
   }
 
   function buyTrail() {
-    if (state.trailLevel >= MAX_LEVEL) return;
+    if (state.trailLevel >= TRAIL_MAX) return;
     const cost = trailCost(state.trailLevel);
     if (state.bank < cost) return;
     state.bank -= cost;
@@ -297,8 +382,51 @@
     refreshShopUI();
   }
 
+  function buyEngine() {
+    if (state.engineLevel >= ENGINE_MAX) return;
+    const cost = engineCost(state.engineLevel);
+    if (state.bank < cost) return;
+    state.bank -= cost;
+    state.engineLevel++;
+    persistBank();
+    persistLevels();
+    Audio67.playPurchase();
+    refreshShopUI();
+  }
+
   buyWingsBtn.addEventListener("click", buyWings);
   buyTrailBtn.addEventListener("click", buyTrail);
+  buyEngineBtn.addEventListener("click", buyEngine);
+
+  // ---------- Achievements UI ----------
+  function refreshAchievementsUI() {
+    achievementListEl.innerHTML = "";
+    ACHIEVEMENTS.forEach((a) => {
+      const unlocked = state.achievements.has(a.id);
+      const el = document.createElement("div");
+      el.className = "achievement" + (unlocked ? " unlocked" : "");
+      el.innerHTML = `
+        <div class="achievement-icon">${unlocked ? "🏆" : "🔒"}</div>
+        <div class="achievement-text">
+          <div class="achievement-name">${unlocked ? a.name : "???"}</div>
+          <div class="achievement-desc">${unlocked ? a.desc : "Reach " + fmtVelocity(a.v) + " to unlock."}</div>
+        </div>
+        <div class="achievement-thresh">${fmtVelocity(a.v)}</div>
+      `;
+      achievementListEl.appendChild(el);
+    });
+  }
+
+  function checkAchievements() {
+    for (const a of ACHIEVEMENTS) {
+      if (!state.achievements.has(a.id) && state.velocity >= a.v) {
+        state.achievements.add(a.id);
+        localStorage.setItem("sixseven_achievements", JSON.stringify([...state.achievements]));
+        Audio67.playAchievement();
+        showMilestone("🏆 " + a.name + " — " + a.desc, 4200);
+      }
+    }
+  }
 
   // ---------- Shop / menu wiring ----------
   let audioStarted = false;
@@ -340,6 +468,7 @@
   function setShopTab(name) {
     document.querySelectorAll(".shop-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
     document.getElementById("tab-upgrades").classList.toggle("hidden", name !== "upgrades");
+    document.getElementById("tab-achievements").classList.toggle("hidden", name !== "achievements");
     document.getElementById("tab-music").classList.toggle("hidden", name !== "music");
   }
   document.querySelectorAll(".shop-tab").forEach((b) => {
@@ -412,7 +541,7 @@
 
   function applyThrust(mult) {
     const bonusSteps = Math.min(state.combo, MAX_COMBO_BONUS_STEPS);
-    const power = (THRUST + bonusSteps * COMBO_BONUS) * mult * wingsThrustMult(state.wingsLevel);
+    const power = (TAP_IMPULSE_BASE + bonusSteps * COMBO_BONUS) * mult * wingsThrustMult(state.wingsLevel);
     state.velocity = clamp(state.velocity + power, MIN_VELOCITY, MAX_VELOCITY);
     state.landed = false;
     const count = 6 + state.trailLevel * 2;
@@ -483,6 +612,11 @@
     if (state.running) return;
     state.running = true;
     startScreen.classList.add("hidden");
+    if (state.pendingWelcomeBack) {
+      showMilestone(`Welcome back! +${state.pendingWelcomeBack.toLocaleString()} 67s earned while you were away.`, 4000);
+      refreshBankDisplays();
+      state.pendingWelcomeBack = null;
+    }
   }
 
   // ---------- Milestone banner ----------
@@ -496,18 +630,34 @@
       state.milestoneIdx++;
     }
   }
-  function showMilestone(text) {
+  function showMilestone(text, duration) {
     milestoneEl.textContent = text;
     milestoneEl.classList.add("show");
     Audio67.playMilestone();
     clearTimeout(milestoneTimer);
-    milestoneTimer = setTimeout(() => milestoneEl.classList.remove("show"), 2600);
+    milestoneTimer = setTimeout(() => milestoneEl.classList.remove("show"), duration || 2600);
   }
 
-  // ---------- World -> screen ----------
+  // ---------- World -> screen (adaptive camera: keeps real 1:1 distances, zoom auto-scales) ----------
   const CENTER_Y_FRAC = 0.56;
-  function worldToScreenY(worldY, altitude, parallax = 1) {
-    return H * CENTER_Y_FRAC - (worldY - altitude) * ALT_SCALE * parallax;
+  const VIEW_WINDOW = 0.45;
+  const DIST_FLOOR = 600;
+
+  function currentScale(distance) {
+    const ref = Math.max(distance, DIST_FLOOR);
+    return (VIEW_WINDOW * H) / ref;
+  }
+  function worldToScreenY(worldY, distance, parallax = 1) {
+    return H * CENTER_Y_FRAC - (worldY - distance) * currentScale(distance) * parallax;
+  }
+  // soft fade only right at the true screen edge — objects stay visible the whole
+  // time they're actually on screen instead of popping based on arbitrary distance
+  function edgeFade(sy) {
+    const pad = 90;
+    if (sy < -pad || sy > H + pad) return 0;
+    const topFade = clamp((sy + pad) / pad, 0, 1);
+    const bottomFade = clamp((H + pad - sy) / pad, 0, 1);
+    return Math.min(topFade, bottomFade, 1);
   }
 
   // ---------- Drawing helpers ----------
@@ -536,7 +686,7 @@
   }
 
   function starOpacity(altitude) {
-    return clamp((altitude - 13000) / 15000, 0, 1);
+    return clamp((altitude - 60000) / 240000, 0, 1);
   }
 
   function drawStars(altitude, t) {
@@ -545,8 +695,9 @@
     ctx.save();
     ctx.globalAlpha = op;
     const spacing = 260;
+    const scale = currentScale(altitude);
     const parallax = 0.15;
-    const offset = (altitude * ALT_SCALE * parallax) % spacing;
+    const offset = (altitude * scale * parallax) % spacing;
     const cols = Math.ceil(W / spacing) + 2;
     const rows = Math.ceil(H / spacing) + 2;
     for (let r = -1; r < rows; r++) {
@@ -568,7 +719,7 @@
   }
 
   function drawGalaxySwirl(altitude, t) {
-    const op = clamp((altitude - 100000) / 20000, 0, 1);
+    const op = clamp((altitude - 2e20) / 4e19, 0, 1);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op * 0.9;
@@ -592,13 +743,14 @@
   }
 
   function drawBuildings(altitude) {
-    const op = clamp(1 - altitude / 2500, 0, 1);
+    const y = worldToScreenY(0, altitude);
+    if (y < -400 || y > H + 400) return;
+    const op = edgeFade(y);
     if (op <= 0) return;
     ctx.save();
     ctx.globalAlpha = op;
     ctx.fillStyle = "#2b3a55";
     for (const b of buildings) {
-      const y = worldToScreenY(0, altitude);
       const screenX = ((b.x - altitude * 0.02) % (W + 200) + W + 200) % (W + 200) - 100;
       ctx.fillRect(screenX, y - b.h, b.w, b.h);
       ctx.fillStyle = "rgba(255,220,150,0.5)";
@@ -613,14 +765,13 @@
   }
 
   function drawCloudsAndBirds(altitude, t) {
-    const op = clamp(1 - (altitude - 1500) / 8000, 0.05, 1) * clamp(altitude / 300, 0, 1);
-    if (op <= 0) return;
     ctx.save();
-    ctx.globalAlpha = Math.min(op, 1);
     ctx.fillStyle = "rgba(255,255,255,0.85)";
     for (const c of clouds) {
       const sy = worldToScreenY(c.y, altitude);
-      if (sy < -100 || sy > H + 100) continue;
+      const op = edgeFade(sy);
+      if (op <= 0) continue;
+      ctx.globalAlpha = op * 0.85;
       const sx = ((c.x + t * c.speed) % (W + 400)) - 200;
       const s = c.s * 40;
       ctx.beginPath();
@@ -633,7 +784,9 @@
     ctx.lineWidth = 2;
     for (const b of birds) {
       const sy = worldToScreenY(b.y, altitude) + Math.sin(t * 2 + b.phase) * 8;
-      if (sy < -50 || sy > H + 50) continue;
+      const op = edgeFade(sy);
+      if (op <= 0) continue;
+      ctx.globalAlpha = op * 0.7;
       const sx = ((b.x + t * b.speed) % (W + 200)) - 100;
       const flap = Math.sin(t * 8 + b.phase) * 6 * b.s;
       ctx.beginPath();
@@ -645,13 +798,12 @@
   }
 
   function drawPlanes(altitude, t) {
-    const op = clamp(1 - Math.abs(altitude - 7000) / 11000, 0, 1);
-    if (op <= 0) return;
     ctx.save();
-    ctx.globalAlpha = op;
     for (const p of planes) {
       const sy = worldToScreenY(p.y, altitude);
-      if (sy < -60 || sy > H + 60) continue;
+      const op = edgeFade(sy);
+      if (op <= 0) continue;
+      ctx.globalAlpha = op;
       const sx = (((p.x + t * p.speed * p.dir) % (W + 400)) + W + 400) % (W + 400) - 200;
       ctx.save();
       ctx.translate(sx, sy);
@@ -682,13 +834,12 @@
   }
 
   function drawRockets(altitude) {
-    const op = clamp(1 - Math.abs(altitude - 14000) / 13000, 0, 1);
-    if (op <= 0) return;
     ctx.save();
-    ctx.globalAlpha = op;
     for (const r of rockets) {
       const sy = worldToScreenY(r.y, altitude);
-      if (sy < -80 || sy > H + 80) continue;
+      const op = edgeFade(sy);
+      if (op <= 0) continue;
+      ctx.globalAlpha = op;
       ctx.save();
       ctx.translate(r.x % W, sy);
       ctx.scale(r.s, r.s);
@@ -727,14 +878,13 @@
   }
 
   function drawSatellites(altitude, t) {
-    const op = clamp(1 - Math.abs(altitude - 18000) / 15000, 0, 1);
-    if (op <= 0) return;
     ctx.save();
-    ctx.globalAlpha = op;
     ctx.fillStyle = "#cfd6e0";
     for (const s of satellites) {
       const sy = worldToScreenY(s.y, altitude);
-      if (sy < -60 || sy > H + 60) continue;
+      const op = edgeFade(sy);
+      if (op <= 0) continue;
+      ctx.globalAlpha = op;
       const sx = ((s.x + t * s.speed) % (W + 300)) - 150;
       ctx.save();
       ctx.translate(sx, sy);
@@ -750,37 +900,66 @@
     ctx.restore();
   }
 
-  function drawMoon(altitude) {
-    const op = clamp(1 - Math.abs(altitude - MOON_ALT) / 17500, 0, 1);
-    if (op <= 0) return;
-    const sy = worldToScreenY(MOON_ALT, altitude, 0.5);
-    ctx.save();
-    ctx.globalAlpha = op;
-    const r = 130;
-    const g = ctx.createRadialGradient(W * 0.5 - 30, sy - 30, 10, W * 0.5, sy, r);
-    g.addColorStop(0, "#f4f1ea");
-    g.addColorStop(1, "#b9b6ad");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(W * 0.5, sy, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "rgba(150,148,140,0.5)";
-    [[-40, -20, 18], [30, 10, 26], [-10, 50, 14], [50, -50, 12]].forEach(([dx, dy, cr]) => {
-      ctx.beginPath();
-      ctx.arc(W * 0.5 + dx, sy + dy, cr, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.restore();
-  }
-
-  function drawPlanets(altitude) {
-    for (const p of PLANETS) {
-      const op = clamp(1 - Math.abs(altitude - p.at) / 5000, 0, 1);
-      if (op <= 0) continue;
+  function drawLandmarks(altitude, t) {
+    for (const p of LANDMARKS) {
       const sy = worldToScreenY(p.at, altitude, 0.6);
+      const op = edgeFade(sy);
+      if (op <= 0) continue;
       const sx = W * (0.3 + 0.4 * hash(p.at));
       ctx.save();
       ctx.globalAlpha = op;
+
+      if (p.type === "galaxy") {
+        ctx.translate(sx, sy);
+        ctx.rotate(0.4);
+        const g = ctx.createRadialGradient(0, 0, p.r * 0.1, 0, 0, p.r);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(0.3, p.color);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.r, p.r * 0.38, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      if (p.type === "star") {
+        const pulse = 1 + 0.08 * Math.sin(t * 3);
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, p.r * pulse);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(0.4, p.color);
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, sy, p.r * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+          const ang = (i / 4) * Math.PI * 2 + t * 0.2;
+          ctx.beginPath();
+          ctx.moveTo(sx + Math.cos(ang) * p.r * 0.5, sy + Math.sin(ang) * p.r * 0.5);
+          ctx.lineTo(sx + Math.cos(ang) * p.r * 1.6, sy + Math.sin(ang) * p.r * 1.6);
+          ctx.stroke();
+        }
+        ctx.restore();
+        continue;
+      }
+
+      if (p.type === "core") {
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, p.r);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(0.25, p.color);
+        g.addColorStop(1, "rgba(255,220,150,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, sy, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
       if (p.ring) {
         ctx.strokeStyle = "rgba(230,210,160,0.8)";
         ctx.lineWidth = 10;
@@ -796,6 +975,15 @@
       ctx.beginPath();
       ctx.arc(sx, sy, p.r, 0, Math.PI * 2);
       ctx.fill();
+
+      if (p.type === "moon") {
+        ctx.fillStyle = "rgba(150,148,140,0.5)";
+        [[-40, -20, 18], [30, 10, 26], [-10, 50, 14], [50, -50, 12]].forEach(([dx, dy, cr]) => {
+          ctx.beginPath();
+          ctx.arc(sx + dx, sy + dy, cr, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
       ctx.restore();
     }
   }
@@ -961,24 +1149,31 @@
 
     if (state.running && !state.paused) {
       const effGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
-      state.velocity -= effGravity * dt;
+      state.velocity += (engineAccel(state.engineLevel) - effGravity) * dt;
       state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
       const wasAirborne = state.altitude > 0;
       state.altitude += state.velocity * dt;
       if (state.altitude <= 0) {
         state.altitude = 0;
-        state.velocity = 0;
+        if (state.velocity < 0) state.velocity = 0;
         if (wasAirborne && !state.landed) Audio67.playLand();
-        state.landed = true;
+        state.landed = state.velocity <= 0;
+      } else {
+        state.landed = false;
       }
       if (state.velocity <= 0 && state.altitude <= 0) state.combo = 0;
 
-      state.kickPhase += dt * (6 + Math.abs(state.velocity) * 0.01);
+      state.kickPhase += dt * (6 + Math.abs(state.velocity) * 0.0001);
       state.tilt = lerp(state.tilt, state.aDown === state.dDown ? state.tilt * 0.9 : (state.lastKey === "a" ? -1 : 1), 0.2);
 
       if (state.altitude > state.best) {
         state.best = state.altitude;
         localStorage.setItem("sixseven_best", String(Math.floor(state.best)));
+      }
+
+      // idle currency income, proportional to current speed
+      if (state.velocity > 0) {
+        state.bank += state.velocity * IDLE_CURRENCY_RATE * dt;
       }
 
       // combo decays if too slow
@@ -1006,22 +1201,31 @@
       }
 
       checkMilestones();
+      checkAchievements();
 
       for (const pt of state.particles) pt.age += dt;
       state.particles = state.particles.filter((p) => p.age < p.life);
       for (const b of state.bursts) b.age += dt;
       state.bursts = state.bursts.filter((b) => b.age < b.life);
 
-      altEl.textContent = fmtAltitude(state.altitude);
-      bestEl.textContent = fmtAltitude(state.best);
+      altEl.textContent = fmtDistance(state.altitude);
+      speedEl.textContent = fmtVelocity(state.velocity);
+      bestEl.textContent = fmtDistance(state.best);
       comboEl.textContent = state.combo > 1 ? `COMBO ×${state.combo}` : "";
+
+      state.saveAccum += dt;
+      if (state.saveAccum > 1) {
+        state.saveAccum = 0;
+        persistBank();
+        persistSession();
+        if (!shopScreen.classList.contains("hidden")) refreshBankDisplays();
+      }
     }
 
     drawSky(state.altitude);
     drawStars(state.altitude, state.t);
     drawGalaxySwirl(state.altitude, state.t);
-    drawPlanets(state.altitude);
-    drawMoon(state.altitude);
+    drawLandmarks(state.altitude, state.t);
     drawSatellites(state.altitude, state.t);
     drawRockets(state.altitude);
     drawPlanes(state.altitude, state.t);
@@ -1032,8 +1236,9 @@
     requestAnimationFrame(frame);
   }
 
-  altEl.textContent = fmtAltitude(0);
-  bestEl.textContent = fmtAltitude(state.best);
+  altEl.textContent = fmtDistance(0);
+  speedEl.textContent = fmtVelocity(0);
+  bestEl.textContent = fmtDistance(state.best);
   refreshBankDisplays();
   requestAnimationFrame(frame);
 })();
