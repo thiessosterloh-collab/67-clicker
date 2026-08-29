@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>67 Clicker — Ascension</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div id="altitude">
+      <span class="label">ALTITUDE</span>
+      <span id="altitude-value">0 m</span>
+    </div>
+    <div id="best">
+      <span class="label">BEST</span>
+      <span id="best-value">0 m</span>
+    </div>
+  </div>
+
+  <div id="milestone"></div>
+
+  <div id="combo-display"></div>
+
+  <div id="controls-hint">
+    <kbd id="key-a">A</kbd><span class="kw">6</span>
+    &nbsp;&nbsp;alternate&nbsp;&nbsp;
+    <kbd id="key-d">D</kbd><span class="kw">7</span>
+    &nbsp;to levitate
+  </div>
+
+  <div id="touch-controls">
+    <button id="btn-a" class="touch-btn">6</button>
+    <button id="btn-d" class="touch-btn">7</button>
+  </div>
+
+  <div id="start-screen">
+    <h1>67 <span>CLICKER</span></h1>
+    <p class="tagline">he's doing the six seven all the way to the galaxy</p>
+    <p class="howto">Alternate <kbd>A</kbd> / <kbd>D</kbd> (or tap 6 / 7) to flap and rise.<br>Stop mashing and gravity brings you back down.</p>
+    <button id="start-btn">START</button>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
