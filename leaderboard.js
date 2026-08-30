@@ -3,7 +3,7 @@
 // of the game (game.js, a classic script) can call into it like any other module.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
+  getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, collection, query, orderBy, limit, getDocs, serverTimestamp,
@@ -18,6 +18,8 @@ const firebaseConfig = {
   appId: "1:570318259969:web:b9727b99562c7a8dbbbd00",
   measurementId: "G-2D7041D9B9",
 };
+// the same OAuth client Firebase auto-created for this project's Google provider
+const GOOGLE_CLIENT_ID = "570318259969-4nmjdgoc05ed6q66rdl55gqnv166to96.apps.googleusercontent.com";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -28,37 +30,52 @@ onAuthStateChanged(auth, (user) => {
   listeners.forEach((cb) => cb(user));
 });
 
-// popup sign-in is unreliable on GitHub Pages (Cross-Origin-Opener-Policy interferes
-// with the popup<->opener handshake Firebase relies on) — a full-page redirect avoids
-// that entirely. getRedirectResult picks up the result when we land back here.
-// This can also fail silently (resolve to null, no error) if the browser blocks
-// cross-site storage access to the authDomain (Chrome storage partitioning, Safari
-// ITP) — so report *both* outcomes, not just errors, so the game can show something
-// concrete instead of leaving it ambiguous.
-getRedirectResult(auth)
-  .then((result) => {
-    if (result && result.user) {
-      console.log("Redirect sign-in completed:", result.user.displayName);
+// Both signInWithPopup and signInWithRedirect turned out to be unreliable here:
+// popups fight with Cross-Origin-Opener-Policy, and redirect can silently come back
+// with no result at all if the browser blocks the storage access Firebase needs to
+// correlate the returned auth state (a real, known limitation, not a code bug).
+// Google Identity Services (GSI) sidesteps both — it runs its own sign-in flow via
+// an iframe/FedCM directly on this page and just hands back an ID token, which we
+// then exchange for a Firebase credential. No popup, no redirect, no cross-site
+// storage read required.
+function handleGoogleCredential(response) {
+  const credential = GoogleAuthProvider.credential(response.credential);
+  signInWithCredential(auth, credential)
+    .then((result) => {
       window.dispatchEvent(new CustomEvent("leaderboard-signin-success", { detail: result.user }));
-    } else {
-      console.log("getRedirectResult: no pending redirect (normal on a plain page load).");
-    }
-  })
-  .catch((e) => {
-    console.error("Sign-in redirect failed:", e.code, e.message);
-    window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: `${e.code || "error"}: ${e.message}` }));
-  });
+    })
+    .catch((e) => {
+      console.error("Firebase sign-in with Google credential failed:", e.code, e.message);
+      window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: `${e.code || "error"}: ${e.message}` }));
+    });
+}
 
-async function signInWithGoogle() {
-  try {
-    await signInWithRedirect(auth, new GoogleAuthProvider());
-    return true;
-  } catch (e) {
-    console.error("Google sign-in failed:", e.code, e.message);
-    window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: `${e.code || "error"}: ${e.message}` }));
-    return false;
+function initGoogleSignIn(attempt) {
+  attempt = attempt || 0;
+  if (!(window.google && window.google.accounts && window.google.accounts.id)) {
+    if (attempt > 40) {
+      // ~10s of retrying and the GSI script still hasn't loaded — likely blocked
+      window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: "Google Sign-In script failed to load (ad blocker?)." }));
+      return;
+    }
+    setTimeout(() => initGoogleSignIn(attempt + 1), 250);
+    return;
+  }
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+  });
+  const container = document.getElementById("google-signin-container");
+  if (container) {
+    window.google.accounts.id.renderButton(container, {
+      theme: "filled_blue",
+      size: "large",
+      shape: "pill",
+      text: "signin_with",
+    });
   }
 }
+initGoogleSignIn();
 
 async function signOutUser() {
   await signOut(auth);
@@ -118,7 +135,6 @@ async function fetchLeaderboard(topN) {
 }
 
 window.Leaderboard = {
-  signInWithGoogle,
   signOutUser,
   onAuthChange,
   getCurrentUser,

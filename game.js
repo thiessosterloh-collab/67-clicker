@@ -54,14 +54,14 @@
   const MAX_VELOCITY = 1e15;        // safety ceiling, raised 100x — practically unbounded
   const MIN_VELOCITY = -3000;
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
-  const IDLE_CURRENCY_RATE = 0.008; // 67s per m/s of velocity per second (~3x — faster economy)
+  const IDLE_CURRENCY_RATE = 0.005; // 67s per m/s of velocity per second
   const FALL_GRAVITY_MULT = 22;     // once you're actually descending, gravity hits far harder
 
   const WINGS_MAX = 120;    // 10x
   const TRAIL_MAX = 120;    // 10x
   const ENGINE_MAX = 6000;  // 12x
   const STAMINA_MAX = 700;  // ~12x
-  const STAMINA_DRAIN_PER_TAP = 8;
+  const STAMINA_DRAIN_PER_TAP = 12;
 
   const ENGINE_FUEL_MAX = 60;     // seconds of continuous engine runtime on a full tank
   const ENGINE_REFUEL_TIME = 25;  // seconds to fully refuel once the tank runs dry
@@ -163,11 +163,13 @@
       const span = centerAt * SYSTEM_SPAN_FRACTION;
       const step = span / objectCount;
       const startAt = centerAt - span / 2;
+      const sysName = genSystemName(seed);
 
       const planets = [];
       for (let p = 0; p < planetCount; p++) {
         planets.push({
           at: startAt + step * p,
+          name: sysName + " " + String.fromCharCode(98 + p), // real exoplanet convention: b, c, d...
           r: 15 + hash(seed + p + 0.7) * 50,
           color: SYS_PLANET_COLORS[Math.floor(hash(seed + p + 0.9) * SYS_PLANET_COLORS.length)],
           ring: hash(seed + p + 1.1) > 0.82,
@@ -179,7 +181,7 @@
         level: i + 1,
         starColor: STAR_PALETTE[Math.floor(hash(seed + 0.2) * STAR_PALETTE.length)],
         starR: 70 + hash(seed + 0.4) * 90,
-        name: genSystemName(seed),
+        name: sysName,
         planets,
       });
     }
@@ -301,6 +303,7 @@
     exhausted: false,
     engineFuel: ENGINE_FUEL_MAX,
     engineDepleted: false,
+    engineIgnited: false,
     achievements: loadSet("sixseven_achievements"),
     systemsPassed: 0,
     nextSystemIdx: 0,
@@ -342,10 +345,10 @@
   }
   window.addEventListener("beforeunload", persistSession);
 
-  function wingsCost(level) { return Math.round(20 * Math.pow(1.45, level)); }
-  function trailCost(level) { return Math.round(15 * Math.pow(1.4, level)); }
-  function engineCost(level) { return Math.round(22 * Math.pow(1.2, level)); }
-  function staminaCost(level) { return Math.round(25 * Math.pow(1.25, level)); }
+  function wingsCost(level) { return Math.round(20 * Math.pow(1.5, level)); }
+  function trailCost(level) { return Math.round(15 * Math.pow(1.45, level)); }
+  function engineCost(level) { return Math.round(22 * Math.pow(1.25, level)); }
+  function staminaCost(level) { return Math.round(25 * Math.pow(1.3, level)); }
   function wingsThrustMult(level) { return 1 + level * 0.16; }
   function wingsGravityMult(level) { return 1 - Math.min(level * 0.035, 0.35); }
   function trailTapValue(level) { return 1 + level; }
@@ -354,7 +357,7 @@
   function staminaRegenRate(level) { return staminaMax(level) * 0.12; }
   // wings/trail make each tap hit harder and earn more — tax stamina proportionally
   // so that power creep doesn't come for free
-  function staminaDrainMult() { return 1 + state.wingsLevel * 0.025 + state.trailLevel * 0.015; }
+  function staminaDrainMult() { return 1 + state.wingsLevel * 0.04 + state.trailLevel * 0.025; }
   // permanent thrust multiplier from rebirthing, doubling each time
   function rebirthMult() { return Math.pow(2, state.rebirthCount); }
 
@@ -362,7 +365,7 @@
   // real distance), so income keeps pace with the exponentially pricier upgrades
   function distanceRewardMult(distance) {
     const decades = Math.max(0, Math.log10(distance + 1) - 2);
-    return Math.pow(1.5, decades);
+    return Math.pow(1.4, decades);
   }
 
   state.stamina = staminaMax(state.staminaLevel);
@@ -417,6 +420,9 @@
   const staminaFillEl = document.getElementById("stamina-fill");
   const fuelWrapEl = document.getElementById("fuel-wrap");
   const fuelFillEl = document.getElementById("fuel-fill");
+  const igniteBtn = document.getElementById("ignite-btn");
+  igniteBtn.addEventListener("click", tryIgniteEngine);
+  igniteBtn.addEventListener("touchstart", (e) => { e.preventDefault(); tryIgniteEngine(); }, { passive: false });
   const discRack = document.getElementById("disc-rack");
   const muteBtn = document.getElementById("mute-btn");
   const achievementListEl = document.getElementById("achievement-list");
@@ -424,7 +430,6 @@
   const lbSignedInEl = document.getElementById("leaderboard-signed-in");
   const lbAvatarEl = document.getElementById("leaderboard-avatar");
   const lbUsernameEl = document.getElementById("leaderboard-username");
-  const lbSigninBtn = document.getElementById("leaderboard-signin-btn");
   const lbSignoutBtn = document.getElementById("leaderboard-signout-btn");
   const lbListEl = document.getElementById("leaderboard-list");
   const startAuthStatusEl = document.getElementById("start-auth-status");
@@ -454,14 +459,14 @@
     const eMaxed = eLevel >= ENGINE_MAX;
     engineLevelEl.textContent = eMaxed ? "MAX" : "Lv " + eLevel;
     engineDescEl.textContent = eLevel <= 0
-      ? "Passive thrust — keeps accelerating even when you're not tapping. Runs on a 60s fuel tank; land back on the ground to refuel."
-      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust · 60s tank, refuels on landing`;
+      ? "Passive thrust once ignited (Space, or the 🔥 button) — keeps accelerating even when you're not tapping. Runs on a 60s fuel tank; land to refuel, then re-ignite."
+      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² once ignited · 60s tank, refuels on landing, re-ignite after`;
     setBuyState(buyEngineBtn, eMaxed, engineCost(eLevel));
 
     const sLevel = state.staminaLevel;
     const sMaxed = sLevel >= STAMINA_MAX;
     staminaLevelEl.textContent = sMaxed ? "MAX" : "Lv " + sLevel;
-    staminaDescEl.textContent = `Max stamina: ${Math.round(staminaMax(sLevel))} — longer climbs before you drop. Recharges on the ground.`;
+    staminaDescEl.textContent = `Max stamina: ${Math.round(staminaMax(sLevel))} — only drains when the Engine isn't actively burning. Recharges on the ground.`;
     setBuyState(buyStaminaBtn, sMaxed, staminaCost(sLevel));
 
     if (state.achievements.has("galaxyout")) {
@@ -647,15 +652,6 @@
   if (window.Leaderboard) wireLeaderboard();
   else window.addEventListener("leaderboard-ready", wireLeaderboard, { once: true });
 
-  lbSigninBtn.addEventListener("click", async () => {
-    if (!window.Leaderboard) return;
-    lbSigninBtn.disabled = true;
-    lbSigninBtn.textContent = "Signing in…";
-    const ok = await window.Leaderboard.signInWithGoogle();
-    lbSigninBtn.disabled = false;
-    lbSigninBtn.textContent = "Sign in with Google";
-    if (ok) refreshLeaderboardUI();
-  });
   lbSignoutBtn.addEventListener("click", async () => {
     if (!window.Leaderboard) return;
     await window.Leaderboard.signOutUser();
@@ -780,15 +776,35 @@
   });
 
   // ---------- Input ----------
+  function engineActive() {
+    return state.engineIgnited && !state.engineDepleted && state.engineFuel > 0;
+  }
+
   function tryThrust(mult) {
     if (state.exhausted || state.stamina <= 0) {
       Audio67.playEmpty();
       return false;
     }
     applyThrust(mult);
-    state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN_PER_TAP * staminaDrainMult());
-    if (state.stamina <= 0) state.exhausted = true;
+    // the engine covers you while it's actively burning — stamina is purely a
+    // backup for when it isn't (not yet ignited, or run dry)
+    if (!engineActive()) {
+      state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN_PER_TAP * staminaDrainMult());
+      if (state.stamina <= 0) state.exhausted = true;
+    }
     return true;
+  }
+
+  function tryIgniteEngine() {
+    if (!state.running || state.paused) return;
+    if (state.engineLevel <= 0 || state.engineIgnited) return;
+    if (state.engineDepleted || state.engineFuel <= 0) {
+      Audio67.playEmpty();
+      return;
+    }
+    state.engineIgnited = true;
+    Audio67.playRocketRumble();
+    showMilestone("🔥 Engine ignited!", 1400);
   }
 
   function press(key) {
@@ -878,6 +894,10 @@
     const k = e.key.toLowerCase();
     if (k === "a" || k === "d") {
       if (!e.repeat) press(k);
+      e.preventDefault();
+    }
+    if (k === " " && state.running && !e.repeat) {
+      tryIgniteEngine();
       e.preventDefault();
     }
     if (!state.running && (k === "a" || k === "d" || k === "enter" || k === " ")) {
@@ -1414,6 +1434,12 @@
         ctx.beginPath();
         ctx.arc(sx, psy, pl.r, 0, Math.PI * 2);
         ctx.fill();
+        if (op > 0.4) {
+          ctx.fillStyle = `rgba(255,255,255,${op})`;
+          ctx.font = "bold 13px -apple-system, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(pl.name, sx, psy - pl.r - 10);
+        }
         ctx.restore();
       }
 
@@ -1433,6 +1459,12 @@
         ctx.beginPath();
         ctx.arc(sx, starSy, sys.starR * pulse, 0, Math.PI * 2);
         ctx.fill();
+        if (starOp > 0.4) {
+          ctx.fillStyle = `rgba(255,255,255,${starOp})`;
+          ctx.font = "bold 14px -apple-system, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(sys.name, sx, starSy - sys.starR * pulse - 12);
+        }
         ctx.restore();
       }
     }
@@ -1598,21 +1630,28 @@
     state.t += dt;
 
     if (state.running && !state.paused) {
-      // engine fuel: a full tank runs the engine for ENGINE_FUEL_MAX seconds, then it
-      // cuts out; it only refuels once you're actually back on the ground
+      // engine fuel: has to be manually ignited (it doesn't just auto-run) — once
+      // lit, a full tank runs it for ENGINE_FUEL_MAX seconds, then it cuts out and
+      // needs re-ignition. It only refuels once you're actually back on the ground.
       let effEngineAccel = 0;
       if (state.engineLevel > 0) {
-        if (!state.engineDepleted && state.engineFuel > 0) {
+        if (state.engineIgnited && !state.engineDepleted && state.engineFuel > 0) {
           effEngineAccel = engineAccel(state.engineLevel) * rebirthMult();
           state.engineFuel = Math.max(0, state.engineFuel - dt);
-          if (state.engineFuel <= 0) state.engineDepleted = true;
-        } else if (state.landed) {
+          if (state.engineFuel <= 0) {
+            state.engineDepleted = true;
+            state.engineIgnited = false;
+          }
+        } else if (state.engineDepleted && state.landed) {
           state.engineFuel = Math.min(ENGINE_FUEL_MAX, state.engineFuel + (ENGINE_FUEL_MAX / ENGINE_REFUEL_TIME) * dt);
           if (state.engineFuel >= ENGINE_FUEL_MAX) state.engineDepleted = false;
         }
       }
 
       const normalGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
+      // fast-fall kicks in once you're actually descending, or once you're
+      // exhausted and whatever engine thrust you have (if any — you can still
+      // ignite one while already exhausted) isn't enough to hold you up on its own
       const outOfGas = state.exhausted && effEngineAccel < normalGravity;
       const fallMult = (state.velocity < 0 || outOfGas) ? FALL_GRAVITY_MULT : 1;
       const effGravity = normalGravity * fallMult;
@@ -1706,6 +1745,9 @@
         const fuelPct = clamp((state.engineFuel / ENGINE_FUEL_MAX) * 100, 0, 100);
         fuelFillEl.style.width = fuelPct + "%";
         fuelFillEl.classList.toggle("empty", state.engineDepleted);
+        igniteBtn.classList.toggle("lit", state.engineIgnited);
+        igniteBtn.disabled = state.engineIgnited || state.engineDepleted || state.engineFuel <= 0;
+        igniteBtn.textContent = state.engineIgnited ? "🔥 LIT" : "🔥 IGNITE";
       }
 
       state.saveAccum += dt;

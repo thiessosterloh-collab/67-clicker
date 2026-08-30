@@ -131,7 +131,42 @@ canvas#game {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
   padding: 8px 12px;
-  width: 200px;
+  width: 230px;
+}
+
+.fuel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.fuel-header .label {
+  margin-bottom: 0;
+}
+
+#ignite-btn {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 159, 67, 0.5);
+  background: rgba(255, 159, 67, 0.15);
+  color: #ff9f43;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#ignite-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+#ignite-btn.lit {
+  background: linear-gradient(90deg, #ff9f43, #ffd76a);
+  color: #05060f;
+  border-color: transparent;
 }
 
 #fuel-wrap .label {
