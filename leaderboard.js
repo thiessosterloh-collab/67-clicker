@@ -3,7 +3,7 @@
 // of the game (game.js, a classic script) can call into it like any other module.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, collection, query, orderBy, limit, getDocs, serverTimestamp,
@@ -28,9 +28,16 @@ onAuthStateChanged(auth, (user) => {
   listeners.forEach((cb) => cb(user));
 });
 
+// popup sign-in is unreliable on GitHub Pages (Cross-Origin-Opener-Policy interferes
+// with the popup<->opener handshake Firebase relies on) — a full-page redirect avoids
+// that entirely. getRedirectResult picks up the result when we land back here.
+getRedirectResult(auth).catch((e) => {
+  console.error("Sign-in redirect failed:", e.message);
+});
+
 async function signInWithGoogle() {
   try {
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    await signInWithRedirect(auth, new GoogleAuthProvider());
     return true;
   } catch (e) {
     console.error("Google sign-in failed:", e.message);
@@ -66,6 +73,7 @@ async function submitScore(data) {
           achievementsCount: data.achievementsCount,
           systemsPassed: data.systemsPassed,
           engineLevel: data.engineLevel,
+          rebirths: data.rebirths || 0,
           updatedAt: serverTimestamp(),
         },
         { merge: true }

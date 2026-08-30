@@ -157,16 +157,17 @@
       const planets = [];
       for (let p = 0; p < planetCount; p++) {
         planets.push({
-          offsetFrac: (p + 1) * (0.012 + hash(seed + p + 0.5) * 0.01),
-          r: 8 + hash(seed + p + 0.7) * 20,
+          offsetFrac: (p + 1) * (0.02 + hash(seed + p + 0.5) * 0.015),
+          r: 15 + hash(seed + p + 0.7) * 50,
           color: SYS_PLANET_COLORS[Math.floor(hash(seed + p + 0.9) * SYS_PLANET_COLORS.length)],
           ring: hash(seed + p + 1.1) > 0.82,
         });
       }
       SOLAR_SYSTEMS.push({
         at,
+        level: i + 1,
         starColor: STAR_PALETTE[Math.floor(hash(seed + 0.2) * STAR_PALETTE.length)],
-        starR: 40 + hash(seed + 0.4) * 50,
+        starR: 70 + hash(seed + 0.4) * 90,
         name: genSystemName(seed),
         planets,
       });
@@ -184,7 +185,7 @@
     { id: "100c",     v: 100 * C,      name: "Faster Than Light, Casually",   desc: "One hundred light speeds. No big deal." },
     { id: "1000c",    v: 1000 * C,     name: "Tachyon Certified",             desc: "One thousand times light speed." },
     { id: "systems50", kind: "systems", v: 50,             name: "Grand Tour",  desc: "Passed 50 solar systems on the way through." },
-    { id: "galaxyout", kind: "distance", v: GALAXY_FAR_EDGE, name: "Galaxy's Edge", desc: "160,000 light-years — you crossed the entire Milky Way." },
+    { id: "galaxyout", kind: "distance", v: GALAXY_FAR_EDGE, name: "Galaxy's Edge", desc: "160,000 light-years — you crossed the entire Milky Way. REBIRTH is now unlocked in the shop." },
   ];
 
   // ---------- Decorative world objects (seeded, fixed, real-ish altitude bands) ----------
@@ -278,6 +279,7 @@
     combo: 0,
     best: loadNum("sixseven_best", 0),
     bestVelocity: loadNum("sixseven_bestvelocity", 0),
+    rebirthCount: loadNum("sixseven_rebirths", 0),
     leaderboardSyncAccum: 0,
     bank: loadNum("sixseven_bank", 0),
     wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, WINGS_MAX),
@@ -339,6 +341,11 @@
   function engineAccel(level) { return level <= 0 ? 0 : 8 * Math.pow(1.5, level - 1); }
   function staminaMax(level) { return 100 * Math.pow(1.35, level); }
   function staminaRegenRate(level) { return staminaMax(level) * 0.12; }
+  // wings/trail make each tap hit harder and earn more — tax stamina proportionally
+  // so that power creep doesn't come for free
+  function staminaDrainMult() { return 1 + state.wingsLevel * 0.025 + state.trailLevel * 0.015; }
+  // permanent thrust multiplier from rebirthing, doubling each time
+  function rebirthMult() { return Math.pow(2, state.rebirthCount); }
 
   // exponential currency bonus that scales with how far out you are (in decades of
   // real distance), so income keeps pace with the exponentially pricier upgrades
@@ -392,6 +399,10 @@
   const staminaLevelEl = document.getElementById("stamina-level");
   const staminaDescEl = document.getElementById("stamina-desc");
   const buyStaminaBtn = document.getElementById("buy-stamina");
+  const rebirthCardEl = document.getElementById("card-rebirth");
+  const rebirthLevelEl = document.getElementById("rebirth-level");
+  const rebirthDescEl = document.getElementById("rebirth-desc");
+  const buyRebirthBtn = document.getElementById("buy-rebirth");
   const staminaFillEl = document.getElementById("stamina-fill");
   const fuelWrapEl = document.getElementById("fuel-wrap");
   const fuelFillEl = document.getElementById("fuel-fill");
@@ -417,13 +428,13 @@
     const wLevel = state.wingsLevel;
     const wMaxed = wLevel >= WINGS_MAX;
     wingsLevelEl.textContent = wMaxed ? "MAX" : "Lv " + wLevel;
-    wingsDescEl.textContent = `+${Math.round((wingsThrustMult(wLevel) - 1) * 100)}% thrust per 67 · softer falls`;
+    wingsDescEl.textContent = `+${Math.round((wingsThrustMult(wLevel) - 1) * 100)}% thrust per 67 · softer falls · costs more stamina per tap`;
     setBuyState(buyWingsBtn, wMaxed, wingsCost(wLevel));
 
     const tLevel = state.trailLevel;
     const tMaxed = tLevel >= TRAIL_MAX;
     trailLevelEl.textContent = tMaxed ? "MAX" : "Lv " + tLevel;
-    trailDescEl.textContent = `${trailTapValue(tLevel)} 67s earned per A/D press`;
+    trailDescEl.textContent = `${trailTapValue(tLevel)} 67s earned per A/D press · costs more stamina per tap`;
     setBuyState(buyTrailBtn, tMaxed, trailCost(tLevel));
 
     const eLevel = state.engineLevel;
@@ -439,6 +450,12 @@
     staminaLevelEl.textContent = sMaxed ? "MAX" : "Lv " + sLevel;
     staminaDescEl.textContent = `Max stamina: ${Math.round(staminaMax(sLevel))} — longer climbs before you drop. Recharges on the ground.`;
     setBuyState(buyStaminaBtn, sMaxed, staminaCost(sLevel));
+
+    if (state.achievements.has("galaxyout")) {
+      rebirthCardEl.classList.remove("hidden");
+      rebirthLevelEl.textContent = "×" + rebirthMult().toLocaleString();
+      rebirthDescEl.textContent = `Restart from Earth with ×${(rebirthMult() * 2).toLocaleString()} thrust (up from ×${rebirthMult().toLocaleString()}). Keeps your 67s, upgrades, and records.`;
+    }
 
     refreshAchievementsUI();
   }
@@ -503,10 +520,37 @@
     refreshShopUI();
   }
 
+  function performRebirth() {
+    if (!state.achievements.has("galaxyout")) return;
+    state.rebirthCount++;
+    localStorage.setItem("sixseven_rebirths", String(state.rebirthCount));
+
+    // back to Earth, stronger than ever — records, currency and upgrades are kept
+    state.altitude = 0;
+    state.velocity = 0;
+    state.combo = 0;
+    state.lastKey = null;
+    state.tilt = 0;
+    state.landed = true;
+    state.milestoneIdx = 0;
+    state.nextSystemIdx = 0;
+    state.particles = [];
+    state.bursts = [];
+    state.stamina = staminaMax(state.staminaLevel);
+    state.exhausted = false;
+    state.engineFuel = ENGINE_FUEL_MAX;
+    state.engineDepleted = false;
+
+    Audio67.playAchievement();
+    showMilestone(`🌌 REBIRTH! Thrust now ×${rebirthMult().toLocaleString()}. Starting over from Earth, stronger than ever.`, 5000);
+    refreshShopUI();
+  }
+
   buyWingsBtn.addEventListener("click", buyWings);
   buyTrailBtn.addEventListener("click", buyTrail);
   buyEngineBtn.addEventListener("click", buyEngine);
   buyStaminaBtn.addEventListener("click", buyStamina);
+  buyRebirthBtn.addEventListener("click", performRebirth);
 
   // ---------- Achievements UI ----------
   function achievementThresh(a) {
@@ -596,6 +640,7 @@
       achievementsCount: state.achievements.size,
       systemsPassed: state.systemsPassed,
       engineLevel: state.engineLevel,
+      rebirths: state.rebirthCount,
     });
   }
 
@@ -613,7 +658,7 @@
     }
     const header = `
       <div class="lb-row lb-header">
-        <div>#</div><div>Player</div><div>Distance</div><div>Top Speed</div><div>Achv</div><div>Systems</div><div>Engine</div>
+        <div>#</div><div>Player</div><div>Distance</div><div>Top Speed</div><div>Achv</div><div>Systems</div><div>Engine</div><div>Reborn</div>
       </div>`;
     const body = rows.map((r, i) => `
       <div class="lb-row${me && r.id === me.uid ? " lb-me" : ""}">
@@ -624,6 +669,7 @@
         <div>${r.achievementsCount || 0}/${ACHIEVEMENTS.length}</div>
         <div>${r.systemsPassed || 0}</div>
         <div>Lv${r.engineLevel || 0}</div>
+        <div>×${Math.pow(2, r.rebirths || 0).toLocaleString()}</div>
       </div>`).join("");
     lbListEl.innerHTML = header + body;
   }
@@ -710,7 +756,7 @@
       return false;
     }
     applyThrust(mult);
-    state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN_PER_TAP);
+    state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN_PER_TAP * staminaDrainMult());
     if (state.stamina <= 0) state.exhausted = true;
     return true;
   }
@@ -761,7 +807,7 @@
 
   function applyThrust(mult) {
     const bonusSteps = Math.min(state.combo, MAX_COMBO_BONUS_STEPS);
-    const power = (TAP_IMPULSE_BASE + bonusSteps * COMBO_BONUS) * mult * wingsThrustMult(state.wingsLevel);
+    const power = (TAP_IMPULSE_BASE + bonusSteps * COMBO_BONUS) * mult * wingsThrustMult(state.wingsLevel) * rebirthMult();
     state.velocity = clamp(state.velocity + power, MIN_VELOCITY, MAX_VELOCITY);
     state.landed = false;
     const count = 6 + state.trailLevel * 2;
@@ -866,8 +912,9 @@
       state.altitude >= SOLAR_SYSTEMS[state.nextSystemIdx].at
     ) {
       state.systemsPassed++;
-      if (state.systemsPassed <= 3 || state.systemsPassed % 10 === 0) {
-        showMilestone(`Entering system ${SOLAR_SYSTEMS[state.nextSystemIdx].name}`);
+      const sys = SOLAR_SYSTEMS[state.nextSystemIdx];
+      if (sys.level <= 10 || sys.level % 5 === 0) {
+        showMilestone(`Level ${sys.level}: entering system ${sys.name}`);
       }
       state.nextSystemIdx++;
     }
@@ -1330,7 +1377,7 @@
         const psy = screenY(planetAt, altitude, sysScale, 0.6);
         const op = edgeFade(psy);
         if (op <= 0) continue;
-        const psx = sx + (i - sys.planets.length / 2) * 55;
+        const psx = sx + (i - sys.planets.length / 2) * 90;
         ctx.save();
         ctx.globalAlpha = op;
         if (pl.ring) {
@@ -1518,7 +1565,7 @@
       let effEngineAccel = 0;
       if (state.engineLevel > 0) {
         if (!state.engineDepleted && state.engineFuel > 0) {
-          effEngineAccel = engineAccel(state.engineLevel);
+          effEngineAccel = engineAccel(state.engineLevel) * rebirthMult();
           state.engineFuel = Math.max(0, state.engineFuel - dt);
           if (state.engineFuel <= 0) state.engineDepleted = true;
         } else if (state.landed) {
