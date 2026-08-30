@@ -421,14 +421,14 @@
     const eMaxed = eLevel >= ENGINE_MAX;
     engineLevelEl.textContent = eMaxed ? "MAX" : "Lv " + eLevel;
     engineDescEl.textContent = eLevel <= 0
-      ? "Passive thrust — keeps accelerating even when you're not tapping. Runs on a 60s fuel tank that refuels automatically."
-      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust · 60s tank, ~${ENGINE_REFUEL_TIME}s to refuel`;
+      ? "Passive thrust — keeps accelerating even when you're not tapping. Runs on a 60s fuel tank; land back on the ground to refuel."
+      : `+${engineAccel(eLevel).toLocaleString(undefined, { maximumFractionDigits: 1 })} m/s² of passive thrust · 60s tank, refuels on landing`;
     setBuyState(buyEngineBtn, eMaxed, engineCost(eLevel));
 
     const sLevel = state.staminaLevel;
     const sMaxed = sLevel >= STAMINA_MAX;
     staminaLevelEl.textContent = sMaxed ? "MAX" : "Lv " + sLevel;
-    staminaDescEl.textContent = `Max stamina: ${Math.round(staminaMax(sLevel))} — longer climbs before you drop`;
+    staminaDescEl.textContent = `Max stamina: ${Math.round(staminaMax(sLevel))} — longer climbs before you drop. Recharges on the ground.`;
     setBuyState(buyStaminaBtn, sMaxed, staminaCost(sLevel));
 
     refreshAchievementsUI();
@@ -1420,15 +1420,14 @@
 
     if (state.running && !state.paused) {
       // engine fuel: a full tank runs the engine for ENGINE_FUEL_MAX seconds, then it
-      // cuts out and refuels over ENGINE_REFUEL_TIME seconds before resuming
+      // cuts out; it only refuels once you're actually back on the ground
       let effEngineAccel = 0;
       if (state.engineLevel > 0) {
         if (!state.engineDepleted && state.engineFuel > 0) {
           effEngineAccel = engineAccel(state.engineLevel);
           state.engineFuel = Math.max(0, state.engineFuel - dt);
           if (state.engineFuel <= 0) state.engineDepleted = true;
-        } else {
-          state.engineDepleted = true;
+        } else if (state.landed) {
           state.engineFuel = Math.min(ENGINE_FUEL_MAX, state.engineFuel + (ENGINE_FUEL_MAX / ENGINE_REFUEL_TIME) * dt);
           if (state.engineFuel >= ENGINE_FUEL_MAX) state.engineDepleted = false;
         }
@@ -1441,10 +1440,6 @@
       state.velocity += (effEngineAccel - effGravity) * dt;
       state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
 
-      const smaxNow = staminaMax(state.staminaLevel);
-      state.stamina = Math.min(smaxNow, state.stamina + staminaRegenRate(state.staminaLevel) * dt);
-      if (state.exhausted && state.stamina >= smaxNow * 0.25) state.exhausted = false;
-
       const wasAirborne = state.altitude > 0;
       state.altitude += state.velocity * dt;
       if (state.altitude <= 0) {
@@ -1455,6 +1450,13 @@
       } else {
         state.landed = false;
       }
+
+      // stamina only recharges once you're actually back on the ground
+      const smaxNow = staminaMax(state.staminaLevel);
+      if (state.landed) {
+        state.stamina = Math.min(smaxNow, state.stamina + staminaRegenRate(state.staminaLevel) * dt);
+      }
+      if (state.exhausted && state.stamina >= smaxNow * 0.25) state.exhausted = false;
       if (state.velocity <= 0 && state.altitude <= 0) state.combo = 0;
 
       state.kickPhase += dt * (6 + Math.abs(state.velocity) * 0.0001);
