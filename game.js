@@ -277,6 +277,8 @@
     lastPressAt: 0,
     combo: 0,
     best: loadNum("sixseven_best", 0),
+    bestVelocity: loadNum("sixseven_bestvelocity", 0),
+    leaderboardSyncAccum: 0,
     bank: loadNum("sixseven_bank", 0),
     wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, WINGS_MAX),
     trailLevel: clamp(loadNum("sixseven_trail", 0), 0, TRAIL_MAX),
@@ -396,6 +398,13 @@
   const discRack = document.getElementById("disc-rack");
   const muteBtn = document.getElementById("mute-btn");
   const achievementListEl = document.getElementById("achievement-list");
+  const lbSignedOutEl = document.getElementById("leaderboard-signed-out");
+  const lbSignedInEl = document.getElementById("leaderboard-signed-in");
+  const lbAvatarEl = document.getElementById("leaderboard-avatar");
+  const lbUsernameEl = document.getElementById("leaderboard-username");
+  const lbSigninBtn = document.getElementById("leaderboard-signin-btn");
+  const lbSignoutBtn = document.getElementById("leaderboard-signout-btn");
+  const lbListEl = document.getElementById("leaderboard-list");
 
   function refreshBankDisplays() {
     bankEl.textContent = Math.floor(state.bank).toLocaleString();
@@ -542,6 +551,89 @@
     }
   }
 
+  // ---------- Leaderboard (Firebase) ----------
+  function updateLeaderboardAuthUI(user) {
+    if (user) {
+      lbSignedOutEl.classList.add("hidden");
+      lbSignedInEl.classList.remove("hidden");
+      lbAvatarEl.src = user.photoURL || "";
+      lbUsernameEl.textContent = user.displayName || "Player";
+      submitLeaderboardScore();
+    } else {
+      lbSignedOutEl.classList.remove("hidden");
+      lbSignedInEl.classList.add("hidden");
+    }
+  }
+
+  // leaderboard.js is a deferred ES module, so it may not have run yet when this
+  // (classic, synchronous) script does — wire up once it's actually ready.
+  function wireLeaderboard() {
+    window.Leaderboard.onAuthChange(updateLeaderboardAuthUI);
+  }
+  if (window.Leaderboard) wireLeaderboard();
+  else window.addEventListener("leaderboard-ready", wireLeaderboard, { once: true });
+
+  lbSigninBtn.addEventListener("click", async () => {
+    if (!window.Leaderboard) return;
+    lbSigninBtn.disabled = true;
+    lbSigninBtn.textContent = "Signing in…";
+    const ok = await window.Leaderboard.signInWithGoogle();
+    lbSigninBtn.disabled = false;
+    lbSigninBtn.textContent = "Sign in with Google";
+    if (ok) refreshLeaderboardUI();
+  });
+  lbSignoutBtn.addEventListener("click", async () => {
+    if (!window.Leaderboard) return;
+    await window.Leaderboard.signOutUser();
+    refreshLeaderboardUI();
+  });
+
+  async function submitLeaderboardScore() {
+    if (!window.Leaderboard || !window.Leaderboard.getCurrentUser()) return;
+    await window.Leaderboard.submitScore({
+      bestDistance: state.best,
+      bestVelocity: state.bestVelocity,
+      achievementsCount: state.achievements.size,
+      systemsPassed: state.systemsPassed,
+      engineLevel: state.engineLevel,
+    });
+  }
+
+  async function refreshLeaderboardUI() {
+    if (!window.Leaderboard) {
+      lbListEl.innerHTML = '<div class="lb-empty">Leaderboard unavailable.</div>';
+      return;
+    }
+    lbListEl.innerHTML = '<div class="lb-empty">Loading…</div>';
+    const rows = await window.Leaderboard.fetchLeaderboard(50);
+    const me = window.Leaderboard.getCurrentUser();
+    if (rows.length === 0) {
+      lbListEl.innerHTML = '<div class="lb-empty">No scores yet — be the first!</div>';
+      return;
+    }
+    const header = `
+      <div class="lb-row lb-header">
+        <div>#</div><div>Player</div><div>Distance</div><div>Top Speed</div><div>Achv</div><div>Systems</div><div>Engine</div>
+      </div>`;
+    const body = rows.map((r, i) => `
+      <div class="lb-row${me && r.id === me.uid ? " lb-me" : ""}">
+        <div class="lb-rank">${i + 1}</div>
+        <div class="lb-player">${r.photoURL ? `<img src="${r.photoURL}" alt="">` : ""}<span class="lb-name">${escapeHtml(r.name || "Player")}</span></div>
+        <div>${fmtDistance(r.bestDistance || 0)}</div>
+        <div>${fmtVelocity(r.bestVelocity || 0)}</div>
+        <div>${r.achievementsCount || 0}/${ACHIEVEMENTS.length}</div>
+        <div>${r.systemsPassed || 0}</div>
+        <div>Lv${r.engineLevel || 0}</div>
+      </div>`).join("");
+    lbListEl.innerHTML = header + body;
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
   // ---------- Shop / menu wiring ----------
   let audioStarted = false;
   function ensureAudioStarted() {
@@ -583,7 +675,9 @@
     document.querySelectorAll(".shop-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
     document.getElementById("tab-upgrades").classList.toggle("hidden", name !== "upgrades");
     document.getElementById("tab-achievements").classList.toggle("hidden", name !== "achievements");
+    document.getElementById("tab-leaderboard").classList.toggle("hidden", name !== "leaderboard");
     document.getElementById("tab-music").classList.toggle("hidden", name !== "music");
+    if (name === "leaderboard") refreshLeaderboardUI();
   }
   document.querySelectorAll(".shop-tab").forEach((b) => {
     b.addEventListener("click", () => setShopTab(b.dataset.tab));
@@ -1466,6 +1560,10 @@
         state.best = state.altitude;
         localStorage.setItem("sixseven_best", String(Math.floor(state.best)));
       }
+      if (state.velocity > state.bestVelocity) {
+        state.bestVelocity = state.velocity;
+        localStorage.setItem("sixseven_bestvelocity", String(state.bestVelocity));
+      }
 
       // idle currency income, proportional to current speed, amplified the further out you are
       if (state.velocity > 0) {
@@ -1531,6 +1629,12 @@
         persistBank();
         persistSession();
         if (!shopScreen.classList.contains("hidden")) refreshBankDisplays();
+      }
+
+      state.leaderboardSyncAccum += dt;
+      if (state.leaderboardSyncAccum > 15) {
+        state.leaderboardSyncAccum = 0;
+        submitLeaderboardScore();
       }
     }
 

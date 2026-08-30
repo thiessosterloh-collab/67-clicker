@@ -72,6 +72,7 @@
         <div id="shop-tabs">
           <button class="shop-tab active" data-tab="upgrades">UPGRADES</button>
           <button class="shop-tab" data-tab="achievements">ACHIEVEMENTS</button>
+          <button class="shop-tab" data-tab="leaderboard">LEADERBOARD</button>
           <button class="shop-tab" data-tab="music">MUSIC</button>
         </div>
         <div id="shop-bank">67s: <span id="shop-bank-value">0</span></div>
@@ -128,6 +129,21 @@
         <div id="achievement-list"></div>
       </div>
 
+      <div id="tab-leaderboard" class="shop-tab-panel hidden">
+        <div id="leaderboard-auth">
+          <div id="leaderboard-signed-out">
+            <p>Sign in with Google to save your run and appear on the global leaderboard.</p>
+            <button id="leaderboard-signin-btn">Sign in with Google</button>
+          </div>
+          <div id="leaderboard-signed-in" class="hidden">
+            <img id="leaderboard-avatar" alt="">
+            <span id="leaderboard-username"></span>
+            <button id="leaderboard-signout-btn">Sign Out</button>
+          </div>
+        </div>
+        <div id="leaderboard-list"></div>
+      </div>
+
       <div id="tab-music" class="shop-tab-panel hidden">
         <div id="disc-rack"></div>
         <button id="mute-btn">🔊 SOUND ON</button>
@@ -135,6 +151,7 @@
     </div>
   </div>
 
+  <script type="module" src="leaderboard.js"></script>
   <script src="audio.js"></script>
   <script src="game.js"></script>
 </body>

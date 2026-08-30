@@ -25,11 +25,35 @@ On mobile, on-screen 6 / 7 buttons appear automatically.
   - **Trail** — more 67s earned per tap, with the particle trail growing flashier each tier. (up to level 120)
 - **Achievements** unlock at real velocity milestones: Mach 1 (with an actual sonic-boom sound), Earth escape velocity, 1% and 50% of light speed, light speed itself, and multiples of it (10c, 100c, 1000c) — plus distance/exploration achievements for crossing the whole galaxy and passing 50 solar systems. See them all (locked and unlocked) in the shop's ACHIEVEMENTS tab.
 - **Music**: the shop's MUSIC tab is a rack of discs — synthesized, royalty-free chiptune/ambient tracks generated live with WebAudio oscillators. Pick a disc to switch the soundtrack instantly, or mute entirely.
+- **Leaderboard**: sign in with Google from the shop's LEADERBOARD tab to save your best distance, top speed, achievements, systems passed and Engine level to a global leaderboard (Firebase Auth + Firestore). Playing without signing in still works exactly the same — it's opt-in.
 - Best distance, currency, upgrade levels, unlocked achievements, and music/mute preference all persist via `localStorage`.
 
 ## Files
 
 - `index.html` — page structure, HUD (including the stamina bar), shop overlay
-- `style.css` — layout, HUD, shop/disc/achievement/stamina styling
+- `style.css` — layout, HUD, shop/disc/achievement/stamina/leaderboard styling
 - `game.js` — game loop, real-world physics, stamina, adaptive camera, solar system generation, upgrades, achievements, rendering
 - `audio.js` — synthesized SFX (including noise-based wind/rumble/sonic-boom) and the music engine (note scheduler + track definitions)
+- `leaderboard.js` — Firebase Auth (Google sign-in) + Firestore leaderboard, loaded as an ES module
+
+## Leaderboard setup (Firebase Console)
+
+The client code is already wired up to your `clicker-284f6` project. A few things need to be done once in the [Firebase Console](https://console.firebase.google.com/) itself (not something I can do from here):
+
+1. **Authentication → Sign-in method** → enable the **Google** provider.
+2. **Authentication → Settings → Authorized domains** → make sure `thiessosterloh-collab.github.io` is listed (and `localhost` if you want to test locally — it's usually there by default).
+3. **Firestore Database** → create a database if you haven't (Native mode, any region).
+4. **Firestore Database → Rules** → paste this so players can only write their own score, but everyone can read the board:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /leaderboard/{userId} {
+         allow read: if true;
+         allow write: if request.auth != null && request.auth.uid == userId;
+       }
+     }
+   }
+   ```
+
+Until those are done, the LEADERBOARD tab still works without errors — it just shows "No scores yet" and sign-in will fail silently (logged to the console) rather than breaking the page.
