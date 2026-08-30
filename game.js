@@ -143,6 +143,11 @@
     return prefix + "-" + num;
   }
 
+  // Each system's objects are laid out SEQUENTIALLY along the distance axis —
+  // planet, planet, ..., star — each getting its own tight visibility window, so you
+  // meet them one at a time (planet, planet, star, void, planet, planet, star, void...)
+  // instead of the whole system appearing as one cluttered cluster.
+  const SYSTEM_SPAN_FRACTION = 0.07; // how much of its own distance a system's objects spread across
   const SOLAR_SYSTEMS = [];
   {
     // start right past our own solar system rather than all the way out at Proxima's
@@ -151,20 +156,26 @@
     const logEnd = Math.log10(GALAXY_FAR_EDGE);
     for (let i = 0; i < NUM_SOLAR_SYSTEMS; i++) {
       const frac = i / (NUM_SOLAR_SYSTEMS - 1);
-      const at = Math.pow(10, logStart + frac * (logEnd - logStart));
+      const centerAt = Math.pow(10, logStart + frac * (logEnd - logStart));
       const seed = i * 7.13 + 1;
       const planetCount = 2 + Math.floor(hash(seed + 0.3) * 4);
+      const objectCount = planetCount + 1; // planets, then the star last
+      const span = centerAt * SYSTEM_SPAN_FRACTION;
+      const step = span / objectCount;
+      const startAt = centerAt - span / 2;
+
       const planets = [];
       for (let p = 0; p < planetCount; p++) {
         planets.push({
-          offsetFrac: (p + 1) * (0.02 + hash(seed + p + 0.5) * 0.015),
+          at: startAt + step * p,
           r: 15 + hash(seed + p + 0.7) * 50,
           color: SYS_PLANET_COLORS[Math.floor(hash(seed + p + 0.9) * SYS_PLANET_COLORS.length)],
           ring: hash(seed + p + 1.1) > 0.82,
         });
       }
       SOLAR_SYSTEMS.push({
-        at,
+        at: startAt,
+        starAt: startAt + step * planetCount,
         level: i + 1,
         starColor: STAR_PALETTE[Math.floor(hash(seed + 0.2) * STAR_PALETTE.length)],
         starR: 70 + hash(seed + 0.4) * 90,
@@ -416,6 +427,8 @@
   const lbSigninBtn = document.getElementById("leaderboard-signin-btn");
   const lbSignoutBtn = document.getElementById("leaderboard-signout-btn");
   const lbListEl = document.getElementById("leaderboard-list");
+  const startAuthStatusEl = document.getElementById("start-auth-status");
+  const authToastEl = document.getElementById("auth-toast");
 
   function refreshBankDisplays() {
     bankEl.textContent = Math.floor(state.bank).toLocaleString();
@@ -602,12 +615,29 @@
       lbSignedInEl.classList.remove("hidden");
       lbAvatarEl.src = user.photoURL || "";
       lbUsernameEl.textContent = user.displayName || "Player";
+      startAuthStatusEl.classList.remove("hidden");
+      startAuthStatusEl.innerHTML = `${user.photoURL ? `<img src="${user.photoURL}" alt="">` : ""}Signed in as ${escapeHtml(user.displayName || "Player")}`;
       submitLeaderboardScore();
     } else {
       lbSignedOutEl.classList.remove("hidden");
       lbSignedInEl.classList.add("hidden");
+      startAuthStatusEl.classList.add("hidden");
     }
   }
+
+  let authToastTimer = null;
+  function showAuthToast(text, kind) {
+    authToastEl.textContent = text;
+    authToastEl.className = kind;
+    clearTimeout(authToastTimer);
+    authToastTimer = setTimeout(() => { authToastEl.className = "hidden"; }, 6000);
+  }
+  window.addEventListener("leaderboard-signin-success", (e) => {
+    showAuthToast(`✅ Signed in as ${e.detail.displayName || "Player"}!`, "success");
+  });
+  window.addEventListener("leaderboard-signin-error", (e) => {
+    showAuthToast(`❌ Sign-in failed: ${e.detail}`, "error");
+  });
 
   // leaderboard.js is a deferred ES module, so it may not have run yet when this
   // (classic, synchronous) script does — wire up once it's actually ready.
@@ -943,6 +973,13 @@
   // genuinely distance-gated) window to appear, cross, and scroll away in.
   function scaleForLandmark(at) {
     const WINDOW_FRACTION = 0.3;
+    return (VIEW_WINDOW * H) / (WINDOW_FRACTION * Math.max(at, DIST_FLOOR));
+  }
+  // solar-system objects need a much tighter window than the real planets: they're
+  // packed close together (see SYSTEM_SPAN_FRACTION) and meant to be met one at a
+  // time in sequence, not all visible together
+  function scaleForSystemObject(at) {
+    const WINDOW_FRACTION = 0.01;
     return (VIEW_WINDOW * H) / (WINDOW_FRACTION * Math.max(at, DIST_FLOOR));
   }
   function screenY(worldY, distance, scale, parallax = 1) {
@@ -1351,15 +1388,43 @@
 
   function drawSolarSystems(altitude, t) {
     for (const sys of SOLAR_SYSTEMS) {
-      const sysScale = scaleForLandmark(sys.at);
-      const starSy = screenY(sys.at, altitude, sysScale, 0.6);
-      const starOp = edgeFade(starSy);
       const sx = W * (0.25 + 0.5 * hash(sys.at));
 
+      // planets first, one at a time — each has its own tight window, so only one
+      // or two objects from this system are ever in view at once
+      for (const pl of sys.planets) {
+        const scale = scaleForSystemObject(pl.at);
+        const psy = screenY(pl.at, altitude, scale, 0.6);
+        const op = edgeFade(psy);
+        if (op <= 0) continue;
+        ctx.save();
+        ctx.globalAlpha = op;
+        if (pl.ring) {
+          ctx.strokeStyle = "rgba(230,210,160,0.7)";
+          ctx.lineWidth = pl.r * 0.35;
+          ctx.beginPath();
+          ctx.ellipse(sx, psy, pl.r * 1.7, pl.r * 0.5, -0.3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        const g = ctx.createRadialGradient(sx - pl.r * 0.3, psy - pl.r * 0.3, pl.r * 0.1, sx, psy, pl.r);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(0.2, pl.color);
+        g.addColorStop(1, "#000");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(sx, psy, pl.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // the star comes last — the system's climax before the void to the next one
+      const starScale = scaleForSystemObject(sys.starAt);
+      const starSy = screenY(sys.starAt, altitude, starScale, 0.6);
+      const starOp = edgeFade(starSy);
       if (starOp > 0) {
         ctx.save();
         ctx.globalAlpha = starOp;
-        const pulse = 1 + 0.06 * Math.sin(t * 2 + sys.at * 0.0000001);
+        const pulse = 1 + 0.06 * Math.sin(t * 2 + sys.starAt * 0.0000001);
         const g = ctx.createRadialGradient(sx, starSy, 0, sx, starSy, sys.starR * pulse);
         g.addColorStop(0, "#fff");
         g.addColorStop(0.4, sys.starColor);
@@ -1367,33 +1432,6 @@
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(sx, starSy, sys.starR * pulse, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      for (let i = 0; i < sys.planets.length; i++) {
-        const pl = sys.planets[i];
-        const planetAt = sys.at + sys.at * pl.offsetFrac * (i % 2 === 0 ? 1 : -1);
-        const psy = screenY(planetAt, altitude, sysScale, 0.6);
-        const op = edgeFade(psy);
-        if (op <= 0) continue;
-        const psx = sx + (i - sys.planets.length / 2) * 90;
-        ctx.save();
-        ctx.globalAlpha = op;
-        if (pl.ring) {
-          ctx.strokeStyle = "rgba(230,210,160,0.7)";
-          ctx.lineWidth = pl.r * 0.35;
-          ctx.beginPath();
-          ctx.ellipse(psx, psy, pl.r * 1.7, pl.r * 0.5, -0.3, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        const g = ctx.createRadialGradient(psx - pl.r * 0.3, psy - pl.r * 0.3, pl.r * 0.1, psx, psy, pl.r);
-        g.addColorStop(0, "#fff");
-        g.addColorStop(0.2, pl.color);
-        g.addColorStop(1, "#000");
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(psx, psy, pl.r, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }

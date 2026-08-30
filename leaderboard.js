@@ -31,16 +31,31 @@ onAuthStateChanged(auth, (user) => {
 // popup sign-in is unreliable on GitHub Pages (Cross-Origin-Opener-Policy interferes
 // with the popup<->opener handshake Firebase relies on) — a full-page redirect avoids
 // that entirely. getRedirectResult picks up the result when we land back here.
-getRedirectResult(auth).catch((e) => {
-  console.error("Sign-in redirect failed:", e.message);
-});
+// This can also fail silently (resolve to null, no error) if the browser blocks
+// cross-site storage access to the authDomain (Chrome storage partitioning, Safari
+// ITP) — so report *both* outcomes, not just errors, so the game can show something
+// concrete instead of leaving it ambiguous.
+getRedirectResult(auth)
+  .then((result) => {
+    if (result && result.user) {
+      console.log("Redirect sign-in completed:", result.user.displayName);
+      window.dispatchEvent(new CustomEvent("leaderboard-signin-success", { detail: result.user }));
+    } else {
+      console.log("getRedirectResult: no pending redirect (normal on a plain page load).");
+    }
+  })
+  .catch((e) => {
+    console.error("Sign-in redirect failed:", e.code, e.message);
+    window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: `${e.code || "error"}: ${e.message}` }));
+  });
 
 async function signInWithGoogle() {
   try {
     await signInWithRedirect(auth, new GoogleAuthProvider());
     return true;
   } catch (e) {
-    console.error("Google sign-in failed:", e.message);
+    console.error("Google sign-in failed:", e.code, e.message);
+    window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: `${e.code || "error"}: ${e.message}` }));
     return false;
   }
 }
