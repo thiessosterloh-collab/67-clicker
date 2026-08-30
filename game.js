@@ -56,6 +56,7 @@
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
   const IDLE_CURRENCY_RATE = 0.005; // 67s per m/s of velocity per second
   const FALL_GRAVITY_MULT = 2200;   // once you're actually descending, gravity hits brutally harder (100x)
+  const COOL_RATE = 0.2;            // speed loses at least this fraction of itself per second while falling/exhausted
 
   const WINGS_MAX = 120;    // 10x
   const TRAIL_MAX = 120;    // 10x
@@ -1660,13 +1661,22 @@
       }
 
       const normalGravity = GRAVITY * wingsGravityMult(state.wingsLevel);
-      // fast-fall kicks in once you're actually descending, or once you're
-      // exhausted and whatever engine thrust you have (if any — you can still
-      // ignite one while already exhausted) isn't enough to hold you up on its own
-      const outOfGas = state.exhausted && effEngineAccel < normalGravity;
-      const fallMult = (state.velocity < 0 || outOfGas) ? FALL_GRAVITY_MULT : 1;
+      // fast-fall/cooling kicks in whenever whatever thrust you currently have
+      // (engine alone — this must NOT depend on stamina/tapping, or a pure
+      // engine-only flight with fuel run dry would just coast forever at
+      // whatever relativistic speed it had, which is exactly the bug this fixes)
+      // isn't enough to hold you up on its own, or once you're actually falling
+      const insufficientThrust = effEngineAccel < normalGravity;
+      const cooling = state.velocity < 0 || insufficientThrust;
+      const fallMult = cooling ? FALL_GRAVITY_MULT : 1;
       const effGravity = normalGravity * fallMult;
       state.velocity += (effEngineAccel - effGravity) * dt;
+      if (cooling) {
+        // a fixed deceleration is meaningless against relativistic speeds — decay
+        // speed proportionally too, so it always loses at least COOL_RATE of
+        // itself per second no matter how fast you're going
+        state.velocity *= Math.pow(1 - COOL_RATE, dt);
+      }
       state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
 
       const wasAirborne = state.altitude > 0;
