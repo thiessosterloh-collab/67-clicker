@@ -116,16 +116,16 @@
   ];
 
   const LANDMARKS = [
-    { at: MOON,           r: 130, color: "#b9b6ad", type: "moon" },
-    { at: MARS,           r: 46,  color: "#c1440e", type: "planet" },
-    { at: JUPITER,        r: 100, color: "#d8b26a", type: "planet" },
-    { at: SATURN,         r: 84,  color: "#e3c98f", type: "planet", ring: true },
-    { at: URANUS,         r: 58,  color: "#7fd8d8", type: "planet" },
-    { at: NEPTUNE,        r: 60,  color: "#4f7ecb", type: "planet" },
-    { at: PLUTO,          r: 20,  color: "#c9b8a3", type: "planet" },
-    { at: PROXIMA,        r: 70,  color: "#ffe9d0", type: "star" },
-    { at: GALACTIC_CENTER, r: 140, color: "#fff3d0", type: "core" },
-    { at: ANDROMEDA,      r: 90,  color: "#c9c8ff", type: "galaxy" },
+    { at: MOON,           r: 175, color: "#b9b6ad", type: "moon" },
+    { at: MARS,           r: 65,  color: "#c1440e", type: "planet" },
+    { at: JUPITER,        r: 140, color: "#d8b26a", type: "planet" },
+    { at: SATURN,         r: 118, color: "#e3c98f", type: "planet", ring: true },
+    { at: URANUS,         r: 82,  color: "#7fd8d8", type: "planet" },
+    { at: NEPTUNE,        r: 85,  color: "#4f7ecb", type: "planet" },
+    { at: PLUTO,          r: 30,  color: "#c9b8a3", type: "planet" },
+    { at: PROXIMA,        r: 95,  color: "#ffe9d0", type: "star" },
+    { at: GALACTIC_CENTER, r: 185, color: "#fff3d0", type: "core" },
+    { at: ANDROMEDA,      r: 120, color: "#c9c8ff", type: "galaxy" },
   ];
 
   // ---------- Many, many solar systems — the "levels" of the galaxy crossing ----------
@@ -170,7 +170,7 @@
         planets.push({
           at: startAt + step * p,
           name: sysName + " " + String.fromCharCode(98 + p), // real exoplanet convention: b, c, d...
-          r: 15 + hash(seed + p + 0.7) * 50,
+          r: 28 + hash(seed + p + 0.7) * 75,
           color: SYS_PLANET_COLORS[Math.floor(hash(seed + p + 0.9) * SYS_PLANET_COLORS.length)],
           ring: hash(seed + p + 1.1) > 0.82,
         });
@@ -180,7 +180,7 @@
         starAt: startAt + step * planetCount,
         level: i + 1,
         starColor: STAR_PALETTE[Math.floor(hash(seed + 0.2) * STAR_PALETTE.length)],
-        starR: 70 + hash(seed + 0.4) * 90,
+        starR: 95 + hash(seed + 0.4) * 130,
         name: sysName,
         planets,
       });
@@ -1156,6 +1156,17 @@
     ctx.restore();
   }
 
+  function drawGround(altitude) {
+    const y = screenY(0, altitude, scaleFor(CITY_SCALE_REF));
+    if (y > H + 20) return; // scrolled entirely below view — just sky up here
+    const topY = Math.max(y, -50);
+    const g = ctx.createLinearGradient(0, topY, 0, H);
+    g.addColorStop(0, "#5fae52");
+    g.addColorStop(1, "#2c5f28");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, topY, W, H - topY);
+  }
+
   function drawBuildings(altitude) {
     const y = screenY(0, altitude, scaleFor(CITY_SCALE_REF));
     if (y < -400 || y > H + 400) return;
@@ -1775,6 +1786,7 @@
     drawRockets(state.altitude);
     drawPlanes(state.altitude, state.t);
     drawCloudsAndBirds(state.altitude, state.t);
+    drawGround(state.altitude);
     drawBuildings(state.altitude);
     drawPlayer(state.t);
 
