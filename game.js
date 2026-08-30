@@ -55,7 +55,7 @@
   const MIN_VELOCITY = -3000;
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
   const IDLE_CURRENCY_RATE = 0.005; // 67s per m/s of velocity per second
-  const FALL_GRAVITY_MULT = 22;     // once you're actually descending, gravity hits far harder
+  const FALL_GRAVITY_MULT = 2200;   // once you're actually descending, gravity hits brutally harder (100x)
 
   const WINGS_MAX = 120;    // 10x
   const TRAIL_MAX = 120;    // 10x
@@ -353,7 +353,7 @@
   function wingsGravityMult(level) { return 1 - Math.min(level * 0.035, 0.35); }
   function trailTapValue(level) { return 1 + level; }
   function engineAccel(level) { return level <= 0 ? 0 : 8 * Math.pow(1.5, level - 1); }
-  function staminaMax(level) { return 100 * Math.pow(1.35, level); }
+  function staminaMax(level) { return 0.1 * Math.pow(1.35, level); }
   function staminaRegenRate(level) { return staminaMax(level) * 0.12; }
   // wings/trail make each tap hit harder and earn more — tax stamina proportionally
   // so that power creep doesn't come for free
