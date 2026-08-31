@@ -48,7 +48,7 @@
   const GRAVITY = 9.81;             // real Earth gravity, m/s^2
 
   // ---------- Game tuning ----------
-  const TAP_IMPULSE_BASE = 8;       // m/s per valid alternation (2x — faster overall progress)
+  const TAP_IMPULSE_BASE = 60;       // m/s per valid alternation — with stamina now only allowing ~1 tap per cycle without an engine, that one tap needs to actually matter
   const COMBO_BONUS = 1.2;          // extra m/s per combo step (2x)
   const MAX_COMBO_BONUS_STEPS = 250;   // 10x — bigger combos matter over a much bigger world
   const MAX_VELOCITY = Infinity;    // no cap — a finite ceiling was silently swallowing taps once hit
@@ -292,6 +292,7 @@
     best: loadNum("sixseven_best", 0),
     bestVelocity: loadNum("sixseven_bestvelocity", 0),
     rebirthCount: loadNum("sixseven_rebirths", 0),
+    adminUnlocked: localStorage.getItem("sixseven_admin") === "1",
     leaderboardSyncAccum: 0,
     bank: loadNum("sixseven_bank", 0),
     wingsLevel: clamp(loadNum("sixseven_wings", 0), 0, WINGS_MAX),
@@ -478,7 +479,7 @@
     if (state.achievements.has("galaxyout")) {
       rebirthCardEl.classList.remove("hidden");
       rebirthLevelEl.textContent = "×" + rebirthMult().toLocaleString();
-      rebirthDescEl.textContent = `Restart from Earth with ×${(rebirthMult() * 2).toLocaleString()} thrust (up from ×${rebirthMult().toLocaleString()}). Keeps your 67s, upgrades, and records.`;
+      rebirthDescEl.textContent = `Restart from Earth with ×${(rebirthMult() * 2).toLocaleString()} thrust (up from ×${rebirthMult().toLocaleString()}). Resets your 67s and every upgrade to 0 — keeps achievements and records.`;
     }
 
     refreshAchievementsUI();
@@ -549,7 +550,18 @@
     state.rebirthCount++;
     localStorage.setItem("sixseven_rebirths", String(state.rebirthCount));
 
-    // back to Earth, stronger than ever — records, currency and upgrades are kept
+    // a real reset: currency and every upgrade level wipe back to 0 in exchange for
+    // the permanent thrust multiplier. Achievements, best distance/velocity and
+    // systems-passed are lifetime records and are NOT reset.
+    state.bank = 0;
+    state.wingsLevel = 0;
+    state.trailLevel = 0;
+    state.engineLevel = 0;
+    state.staminaLevel = 0;
+    persistBank();
+    persistLevels();
+
+    // back to Earth
     state.altitude = 0;
     state.velocity = 0;
     state.combo = 0;
@@ -560,14 +572,17 @@
     state.nextSystemIdx = 0;
     state.particles = [];
     state.bursts = [];
-    state.stamina = staminaMax(state.staminaLevel);
+    state.stamina = staminaMax(0);
     state.exhausted = false;
     state.engineFuel = ENGINE_FUEL_MAX;
     state.engineDepleted = false;
+    state.engineIgnited = false;
+    state.coolPhase = "none";
 
     Audio67.playAchievement();
-    showMilestone(`🌌 REBIRTH! Thrust now ×${rebirthMult().toLocaleString()}. Starting over from Earth, stronger than ever.`, 5000);
+    showMilestone(`🌌 REBIRTH! Thrust now ×${rebirthMult().toLocaleString()}. Stats reset — starting over from Earth, stronger than ever.`, 5000);
     refreshShopUI();
+    refreshBankDisplays();
   }
 
   buyWingsBtn.addEventListener("click", buyWings);
@@ -575,6 +590,61 @@
   buyEngineBtn.addEventListener("click", buyEngine);
   buyStaminaBtn.addEventListener("click", buyStamina);
   buyRebirthBtn.addEventListener("click", performRebirth);
+
+  // ---------- Admin panel (secret code: 6016) ----------
+  const adminTabBtn = document.getElementById("admin-tab-btn");
+  if (state.adminUnlocked) adminTabBtn.classList.remove("hidden");
+
+  let adminCodeBuffer = "";
+  window.addEventListener("keydown", (e) => {
+    if (e.key >= "0" && e.key <= "9") {
+      adminCodeBuffer = (adminCodeBuffer + e.key).slice(-4);
+      if (adminCodeBuffer === "6016" && !state.adminUnlocked) {
+        state.adminUnlocked = true;
+        localStorage.setItem("sixseven_admin", "1");
+        adminTabBtn.classList.remove("hidden");
+        showMilestone("🔓 Admin mode unlocked.", 2200);
+      }
+    }
+  });
+
+  function adminRefresh() {
+    persistBank();
+    persistLevels();
+    refreshShopUI();
+    refreshBankDisplays();
+  }
+  document.getElementById("admin-max-engine").addEventListener("click", () => { state.engineLevel = ENGINE_MAX; adminRefresh(); });
+  document.getElementById("admin-max-stamina").addEventListener("click", () => { state.staminaLevel = STAMINA_MAX; adminRefresh(); });
+  document.getElementById("admin-max-wings").addEventListener("click", () => { state.wingsLevel = WINGS_MAX; adminRefresh(); });
+  document.getElementById("admin-max-trail").addEventListener("click", () => { state.trailLevel = TRAIL_MAX; adminRefresh(); });
+  document.getElementById("admin-max-all").addEventListener("click", () => {
+    state.engineLevel = ENGINE_MAX;
+    state.staminaLevel = STAMINA_MAX;
+    state.wingsLevel = WINGS_MAX;
+    state.trailLevel = TRAIL_MAX;
+    state.bank += 1e12;
+    adminRefresh();
+  });
+  document.getElementById("admin-set-distance").addEventListener("click", () => {
+    const n = Math.max(0, Number(document.getElementById("admin-input-distance").value) || 0);
+    state.altitude = n;
+    if (n > state.best) { state.best = n; localStorage.setItem("sixseven_best", String(Math.floor(n))); }
+  });
+  document.getElementById("admin-set-speed").addEventListener("click", () => {
+    const n = Number(document.getElementById("admin-input-speed").value) || 0;
+    state.velocity = n;
+    if (Math.abs(n) > state.bestVelocity) { state.bestVelocity = Math.abs(n); localStorage.setItem("sixseven_bestvelocity", String(state.bestVelocity)); }
+  });
+  document.getElementById("admin-set-bank").addEventListener("click", () => {
+    state.bank = Math.max(0, Number(document.getElementById("admin-input-bank").value) || 0);
+    adminRefresh();
+  });
+  document.getElementById("admin-set-rebirths").addEventListener("click", () => {
+    state.rebirthCount = Math.max(0, Math.floor(Number(document.getElementById("admin-input-rebirths").value) || 0));
+    localStorage.setItem("sixseven_rebirths", String(state.rebirthCount));
+    adminRefresh();
+  });
 
   // ---------- Achievements UI ----------
   function achievementThresh(a) {
@@ -774,6 +844,7 @@
     document.getElementById("tab-achievements").classList.toggle("hidden", name !== "achievements");
     document.getElementById("tab-leaderboard").classList.toggle("hidden", name !== "leaderboard");
     document.getElementById("tab-music").classList.toggle("hidden", name !== "music");
+    document.getElementById("tab-admin").classList.toggle("hidden", name !== "admin");
     if (name === "leaderboard") refreshLeaderboardUI();
   }
   document.querySelectorAll(".shop-tab").forEach((b) => {

@@ -909,4 +909,68 @@ kbd.active {
   cursor: pointer;
 }
 
+.admin-section {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,100,100,0.2);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.admin-section h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #ff9f9f;
+  text-transform: uppercase;
+}
+
+.admin-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-btn {
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,100,100,0.35);
+  background: rgba(255,100,100,0.1);
+  color: #ff9f9f;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.admin-btn-primary {
+  background: linear-gradient(90deg, #ff5d5d, #ff9f43);
+  color: #05060f;
+  border: none;
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.admin-row label {
+  width: 90px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.admin-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--ink);
+  font-size: 13px;
+}
+
 .hidden { display: none !important; }

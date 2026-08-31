@@ -81,6 +81,7 @@
           <button class="shop-tab" data-tab="achievements">ACHIEVEMENTS</button>
           <button class="shop-tab" data-tab="leaderboard">LEADERBOARD</button>
           <button class="shop-tab" data-tab="music">MUSIC</button>
+          <button class="shop-tab hidden" data-tab="admin" id="admin-tab-btn">ADMIN</button>
         </div>
         <div id="shop-bank">67s: <span id="shop-bank-value">0</span></div>
         <button id="shop-close-btn">✕</button>
@@ -91,7 +92,7 @@
           <div class="upgrade-icon" id="icon-rebirth">🌌</div>
           <div class="upgrade-info">
             <div class="upgrade-title">Rebirth <span class="upgrade-level" id="rebirth-level">×1</span></div>
-            <div class="upgrade-desc" id="rebirth-desc">Restart from Earth with permanently doubled thrust. Keeps your 67s, upgrades, and records.</div>
+            <div class="upgrade-desc" id="rebirth-desc">Restart from Earth with permanently doubled thrust. Resets your 67s and every upgrade to 0 — keeps achievements and records.</div>
           </div>
           <button class="upgrade-buy rebirth-buy" id="buy-rebirth">REBIRTH</button>
         </div>
@@ -169,6 +170,26 @@
       <div id="tab-music" class="shop-tab-panel hidden">
         <div id="disc-rack"></div>
         <button id="mute-btn">🔊 SOUND ON</button>
+      </div>
+
+      <div id="tab-admin" class="shop-tab-panel hidden">
+        <div class="admin-section">
+          <h4>Max / Buy All</h4>
+          <div class="admin-btn-row">
+            <button class="admin-btn" id="admin-max-engine">MAX ENGINE</button>
+            <button class="admin-btn" id="admin-max-stamina">MAX STAMINA</button>
+            <button class="admin-btn" id="admin-max-wings">MAX WINGS</button>
+            <button class="admin-btn" id="admin-max-trail">MAX TRAIL</button>
+            <button class="admin-btn admin-btn-primary" id="admin-max-all">MAX ALL</button>
+          </div>
+        </div>
+        <div class="admin-section">
+          <h4>Edit Stats</h4>
+          <div class="admin-row"><label>Distance (m)</label><input id="admin-input-distance" type="number"><button class="admin-btn" id="admin-set-distance">SET</button></div>
+          <div class="admin-row"><label>Speed (m/s)</label><input id="admin-input-speed" type="number"><button class="admin-btn" id="admin-set-speed">SET</button></div>
+          <div class="admin-row"><label>67s (bank)</label><input id="admin-input-bank" type="number"><button class="admin-btn" id="admin-set-bank">SET</button></div>
+          <div class="admin-row"><label>Rebirths</label><input id="admin-input-rebirths" type="number"><button class="admin-btn" id="admin-set-rebirths">SET</button></div>
+        </div>
       </div>
     </div>
   </div>
