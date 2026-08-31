@@ -757,6 +757,58 @@ kbd.active {
   border: none;
 }
 
+.or-divider {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  color: var(--dim);
+  text-align: center;
+}
+
+.name-signin-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+#name-signin {
+  display: flex;
+  gap: 8px;
+}
+
+#name-signin-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+#name-signin-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lb-guest-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--dim);
+  background: rgba(255,255,255,0.1);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 #leaderboard-signed-in {
   display: flex;
   align-items: center;

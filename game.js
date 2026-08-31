@@ -51,12 +51,10 @@
   const TAP_IMPULSE_BASE = 8;       // m/s per valid alternation (2x — faster overall progress)
   const COMBO_BONUS = 1.2;          // extra m/s per combo step (2x)
   const MAX_COMBO_BONUS_STEPS = 250;   // 10x — bigger combos matter over a much bigger world
-  const MAX_VELOCITY = 1e15;        // safety ceiling, raised 100x — practically unbounded
+  const MAX_VELOCITY = Infinity;    // no cap — a finite ceiling was silently swallowing taps once hit
   const MIN_VELOCITY = -3000;
   const COMBO_WINDOW = 520;         // ms allowed between alternating presses
   const IDLE_CURRENCY_RATE = 0.005; // 67s per m/s of velocity per second
-  const FALL_GRAVITY_MULT = 2200;   // once you're actually descending, gravity hits brutally harder (100x)
-  const COOL_RATE = 0.2;            // speed loses at least this fraction of itself per second while falling/exhausted
 
   const WINGS_MAX = 120;    // 10x
   const TRAIL_MAX = 120;    // 10x
@@ -305,6 +303,11 @@
     engineFuel: ENGINE_FUEL_MAX,
     engineDepleted: false,
     engineIgnited: false,
+    coolPhase: "none",
+    coolTimer: 0,
+    coolInitialSpeed: 0,
+    fallStartAltitude: 0,
+    fallTimer: 0,
     achievements: loadSet("sixseven_achievements"),
     systemsPassed: 0,
     nextSystemIdx: 0,
@@ -432,6 +435,8 @@
   const lbAvatarEl = document.getElementById("leaderboard-avatar");
   const lbUsernameEl = document.getElementById("leaderboard-username");
   const lbSignoutBtn = document.getElementById("leaderboard-signout-btn");
+  const nameSigninInput = document.getElementById("name-signin-input");
+  const nameSigninBtn = document.getElementById("name-signin-btn");
   const lbListEl = document.getElementById("leaderboard-list");
   const startAuthStatusEl = document.getElementById("start-auth-status");
   const authToastEl = document.getElementById("auth-toast");
@@ -619,10 +624,12 @@
     if (user) {
       lbSignedOutEl.classList.add("hidden");
       lbSignedInEl.classList.remove("hidden");
+      lbAvatarEl.classList.toggle("hidden", !user.photoURL);
       lbAvatarEl.src = user.photoURL || "";
-      lbUsernameEl.textContent = user.displayName || "Player";
+      const guestTag = user.isAnonymous ? " (guest)" : "";
+      lbUsernameEl.textContent = (user.displayName || "Player") + guestTag;
       startAuthStatusEl.classList.remove("hidden");
-      startAuthStatusEl.innerHTML = `${user.photoURL ? `<img src="${user.photoURL}" alt="">` : ""}Signed in as ${escapeHtml(user.displayName || "Player")}`;
+      startAuthStatusEl.innerHTML = `${user.photoURL ? `<img src="${user.photoURL}" alt="">` : ""}Signed in as ${escapeHtml(user.displayName || "Player")}${guestTag}`;
       submitLeaderboardScore();
     } else {
       lbSignedOutEl.classList.remove("hidden");
@@ -659,6 +666,23 @@
     refreshLeaderboardUI();
   });
 
+  async function submitNameSignin() {
+    if (!window.Leaderboard) return;
+    const name = nameSigninInput.value;
+    if (!name.trim()) return;
+    nameSigninBtn.disabled = true;
+    const ok = await window.Leaderboard.signInWithName(name);
+    nameSigninBtn.disabled = false;
+    if (ok) {
+      nameSigninInput.value = "";
+      refreshLeaderboardUI();
+    }
+  }
+  nameSigninBtn.addEventListener("click", submitNameSignin);
+  nameSigninInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitNameSignin();
+  });
+
   async function submitLeaderboardScore() {
     if (!window.Leaderboard || !window.Leaderboard.getCurrentUser()) return;
     await window.Leaderboard.submitScore({
@@ -690,7 +714,7 @@
     const body = rows.map((r, i) => `
       <div class="lb-row${me && r.id === me.uid ? " lb-me" : ""}">
         <div class="lb-rank">${i + 1}</div>
-        <div class="lb-player">${r.photoURL ? `<img src="${r.photoURL}" alt="">` : ""}<span class="lb-name">${escapeHtml(r.name || "Player")}</span></div>
+        <div class="lb-player">${r.photoURL ? `<img src="${r.photoURL}" alt="">` : ""}<span class="lb-name">${escapeHtml(r.name || "Player")}</span>${r.isAnonymous ? '<span class="lb-guest-tag">GUEST</span>' : ""}</div>
         <div>${fmtDistance(r.bestDistance || 0)}</div>
         <div>${fmtVelocity(r.bestVelocity || 0)}</div>
         <div>${r.achievementsCount || 0}/${ACHIEVEMENTS.length}</div>
@@ -1664,28 +1688,62 @@
       // fast-fall/cooling kicks in whenever whatever thrust you currently have
       // (engine alone — this must NOT depend on stamina/tapping, or a pure
       // engine-only flight with fuel run dry would just coast forever at
-      // whatever relativistic speed it had, which is exactly the bug this fixes)
-      // isn't enough to hold you up on its own, or once you're actually falling
+      // whatever relativistic speed it had) isn't enough to hold you up on its own.
+      // Three-phase scripted cooldown once that happens: a 2s grace period doing
+      // nothing, then a LINEAR decay to zero at 10%/s of whatever speed you had
+      // when cooling started (so it always takes exactly 10s to reach zero,
+      // regardless of how fast that was), then a guaranteed 10s fall to the ground.
       const insufficientThrust = effEngineAccel < normalGravity;
-      const cooling = state.velocity < 0 || insufficientThrust;
-      const fallMult = cooling ? FALL_GRAVITY_MULT : 1;
-      const effGravity = normalGravity * fallMult;
-      state.velocity += (effEngineAccel - effGravity) * dt;
-      if (cooling) {
-        // a fixed deceleration is meaningless against relativistic speeds — decay
-        // speed proportionally too, so it always loses at least COOL_RATE of
-        // itself per second no matter how fast you're going
-        state.velocity *= Math.pow(1 - COOL_RATE, dt);
+
+      if (!insufficientThrust) {
+        state.coolPhase = "none";
+        state.velocity += (effEngineAccel - normalGravity) * dt;
+        state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
+      } else {
+        if (state.coolPhase === "none") {
+          state.coolPhase = "grace";
+          state.coolTimer = 0;
+          state.coolInitialSpeed = Math.abs(state.velocity);
+        }
+        state.coolTimer += dt;
+
+        if (state.coolPhase === "grace" && state.coolTimer >= 2) {
+          state.coolPhase = "decel";
+        }
+
+        if (state.coolPhase === "decel") {
+          const decelPerSec = state.coolInitialSpeed * 0.1;
+          const sign = state.velocity > 0 ? 1 : state.velocity < 0 ? -1 : 0;
+          if (sign !== 0) {
+            state.velocity -= sign * decelPerSec * dt;
+            if ((sign > 0 && state.velocity < 0) || (sign < 0 && state.velocity > 0)) state.velocity = 0;
+          }
+          if (state.velocity === 0) {
+            state.coolPhase = "fall";
+            state.fallStartAltitude = state.altitude;
+            state.fallTimer = 0;
+          }
+        }
+        // 'grace' phase: velocity untouched. 'fall' phase: altitude is scripted
+        // below instead of velocity-integrated, so nothing to do to velocity here.
       }
-      state.velocity = clamp(state.velocity, MIN_VELOCITY, MAX_VELOCITY);
 
       const wasAirborne = state.altitude > 0;
-      state.altitude += state.velocity * dt;
+      if (state.coolPhase === "fall") {
+        state.fallTimer += dt;
+        const ft = clamp(state.fallTimer / 10, 0, 1);
+        state.altitude = state.fallStartAltitude * (1 - ft);
+        state.velocity = state.fallStartAltitude > 0 ? -(state.fallStartAltitude / 10) : 0;
+        if (ft >= 1) state.coolPhase = "none";
+      } else {
+        state.altitude += state.velocity * dt;
+      }
       if (state.altitude <= 0) {
         state.altitude = 0;
         if (state.velocity < 0) state.velocity = 0;
         if (wasAirborne && !state.landed) Audio67.playLand();
         state.landed = state.velocity <= 0;
+        state.coolPhase = "none";
       } else {
         state.landed = false;
       }

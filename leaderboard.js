@@ -3,7 +3,7 @@
 // of the game (game.js, a classic script) can call into it like any other module.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithCredential, signOut, onAuthStateChanged,
+  getAuth, GoogleAuthProvider, signInWithCredential, signInAnonymously, updateProfile, signOut, onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, collection, query, orderBy, limit, getDocs, serverTimestamp,
@@ -77,6 +77,31 @@ function initGoogleSignIn(attempt) {
 }
 initGoogleSignIn();
 
+// Temporary stopgap while Google sign-in gets sorted out: a name-only entry,
+// backed by Firebase Anonymous Auth. Not a verified identity — anyone can type
+// any name — so it's flagged (user.isAnonymous, stored and shown as unverified)
+// rather than presented the same as a real Google-verified sign-in.
+async function signInWithName(name) {
+  const trimmed = (name || "").trim().slice(0, 24) || "Guest Flyer";
+  try {
+    let user = auth.currentUser;
+    if (!user || !user.isAnonymous) {
+      const cred = await signInAnonymously(auth);
+      user = cred.user;
+    }
+    await updateProfile(user, { displayName: trimmed });
+    // updateProfile doesn't itself re-fire onAuthStateChanged, so push the
+    // now-updated user to listeners manually
+    listeners.forEach((cb) => cb(auth.currentUser));
+    window.dispatchEvent(new CustomEvent("leaderboard-signin-success", { detail: { displayName: trimmed, photoURL: null } }));
+    return true;
+  } catch (e) {
+    console.error("Name sign-in failed:", e.code, e.message);
+    window.dispatchEvent(new CustomEvent("leaderboard-signin-error", { detail: `${e.code || "error"}: ${e.message}` }));
+    return false;
+  }
+}
+
 async function signOutUser() {
   await signOut(auth);
 }
@@ -100,6 +125,7 @@ async function submitScore(data) {
         {
           name: user.displayName || "Anonymous Flyer",
           photoURL: user.photoURL || null,
+          isAnonymous: !!user.isAnonymous,
           bestDistance: data.bestDistance,
           bestVelocity: data.bestVelocity,
           achievementsCount: data.achievementsCount,
@@ -135,6 +161,7 @@ async function fetchLeaderboard(topN) {
 }
 
 window.Leaderboard = {
+  signInWithName,
   signOutUser,
   onAuthChange,
   getCurrentUser,
