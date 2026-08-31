@@ -591,21 +591,44 @@
   buyStaminaBtn.addEventListener("click", buyStamina);
   buyRebirthBtn.addEventListener("click", performRebirth);
 
-  // ---------- Admin panel (secret code: 6016) ----------
-  const adminTabBtn = document.getElementById("admin-tab-btn");
-  if (state.adminUnlocked) adminTabBtn.classList.remove("hidden");
+  // ---------- Admin panel: username/password login (client-side only — not real
+  // security, just a real gate instead of a hidden keystroke code, which was
+  // unusable on mobile/touch anyway since there's no keyboard to type it on) ----------
+  const ADMIN_USERNAME = "etzel";
+  const ADMIN_PASSWORD = "SixSeven2026!";
 
-  let adminCodeBuffer = "";
-  window.addEventListener("keydown", (e) => {
-    if (e.key >= "0" && e.key <= "9") {
-      adminCodeBuffer = (adminCodeBuffer + e.key).slice(-4);
-      if (adminCodeBuffer === "6016" && !state.adminUnlocked) {
-        state.adminUnlocked = true;
-        localStorage.setItem("sixseven_admin", "1");
-        adminTabBtn.classList.remove("hidden");
-        showMilestone("🔓 Admin mode unlocked.", 2200);
-      }
+  const adminLoginPanel = document.getElementById("admin-login-panel");
+  const adminControlsPanel = document.getElementById("admin-controls-panel");
+  const adminUsernameInput = document.getElementById("admin-username-input");
+  const adminPasswordInput = document.getElementById("admin-password-input");
+  const adminLoginBtn = document.getElementById("admin-login-btn");
+  const adminLoginError = document.getElementById("admin-login-error");
+  const adminLogoutBtn = document.getElementById("admin-logout-btn");
+
+  function refreshAdminPanel() {
+    adminLoginPanel.classList.toggle("hidden", state.adminUnlocked);
+    adminControlsPanel.classList.toggle("hidden", !state.adminUnlocked);
+  }
+  refreshAdminPanel();
+
+  function tryAdminLogin() {
+    if (adminUsernameInput.value === ADMIN_USERNAME && adminPasswordInput.value === ADMIN_PASSWORD) {
+      state.adminUnlocked = true;
+      localStorage.setItem("sixseven_admin", "1");
+      adminLoginError.classList.add("hidden");
+      adminPasswordInput.value = "";
+      refreshAdminPanel();
+    } else {
+      adminLoginError.classList.remove("hidden");
     }
+  }
+  adminLoginBtn.addEventListener("click", tryAdminLogin);
+  adminPasswordInput.addEventListener("keydown", (e) => { if (e.key === "Enter") tryAdminLogin(); });
+
+  adminLogoutBtn.addEventListener("click", () => {
+    state.adminUnlocked = false;
+    localStorage.removeItem("sixseven_admin");
+    refreshAdminPanel();
   });
 
   function adminRefresh() {
@@ -846,6 +869,7 @@
     document.getElementById("tab-music").classList.toggle("hidden", name !== "music");
     document.getElementById("tab-admin").classList.toggle("hidden", name !== "admin");
     if (name === "leaderboard") refreshLeaderboardUI();
+    if (name === "admin") refreshAdminPanel();
   }
   document.querySelectorAll(".shop-tab").forEach((b) => {
     b.addEventListener("click", () => setShopTab(b.dataset.tab));

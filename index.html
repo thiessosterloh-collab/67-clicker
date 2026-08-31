@@ -81,7 +81,7 @@
           <button class="shop-tab" data-tab="achievements">ACHIEVEMENTS</button>
           <button class="shop-tab" data-tab="leaderboard">LEADERBOARD</button>
           <button class="shop-tab" data-tab="music">MUSIC</button>
-          <button class="shop-tab hidden" data-tab="admin" id="admin-tab-btn">ADMIN</button>
+          <button class="shop-tab" data-tab="admin" id="admin-tab-btn">ADMIN</button>
         </div>
         <div id="shop-bank">67s: <span id="shop-bank-value">0</span></div>
         <button id="shop-close-btn">✕</button>
@@ -173,22 +173,34 @@
       </div>
 
       <div id="tab-admin" class="shop-tab-panel hidden">
-        <div class="admin-section">
-          <h4>Max / Buy All</h4>
-          <div class="admin-btn-row">
-            <button class="admin-btn" id="admin-max-engine">MAX ENGINE</button>
-            <button class="admin-btn" id="admin-max-stamina">MAX STAMINA</button>
-            <button class="admin-btn" id="admin-max-wings">MAX WINGS</button>
-            <button class="admin-btn" id="admin-max-trail">MAX TRAIL</button>
-            <button class="admin-btn admin-btn-primary" id="admin-max-all">MAX ALL</button>
-          </div>
+        <div id="admin-login-panel" class="admin-section">
+          <h4>Admin Login</h4>
+          <p class="admin-note">Client-side only — not real security, just keeps random players out. Anyone with devtools could still find the credentials in the source.</p>
+          <div class="admin-row"><label>Username</label><input id="admin-username-input" type="text" autocomplete="off"></div>
+          <div class="admin-row"><label>Password</label><input id="admin-password-input" type="password" autocomplete="off"></div>
+          <button class="admin-btn admin-btn-primary" id="admin-login-btn">LOG IN</button>
+          <p class="admin-error hidden" id="admin-login-error">Incorrect username or password.</p>
         </div>
-        <div class="admin-section">
-          <h4>Edit Stats</h4>
-          <div class="admin-row"><label>Distance (m)</label><input id="admin-input-distance" type="number"><button class="admin-btn" id="admin-set-distance">SET</button></div>
-          <div class="admin-row"><label>Speed (m/s)</label><input id="admin-input-speed" type="number"><button class="admin-btn" id="admin-set-speed">SET</button></div>
-          <div class="admin-row"><label>67s (bank)</label><input id="admin-input-bank" type="number"><button class="admin-btn" id="admin-set-bank">SET</button></div>
-          <div class="admin-row"><label>Rebirths</label><input id="admin-input-rebirths" type="number"><button class="admin-btn" id="admin-set-rebirths">SET</button></div>
+
+        <div id="admin-controls-panel" class="hidden">
+          <div class="admin-section">
+            <h4>Max / Buy All</h4>
+            <div class="admin-btn-row">
+              <button class="admin-btn" id="admin-max-engine">MAX ENGINE</button>
+              <button class="admin-btn" id="admin-max-stamina">MAX STAMINA</button>
+              <button class="admin-btn" id="admin-max-wings">MAX WINGS</button>
+              <button class="admin-btn" id="admin-max-trail">MAX TRAIL</button>
+              <button class="admin-btn admin-btn-primary" id="admin-max-all">MAX ALL</button>
+            </div>
+          </div>
+          <div class="admin-section">
+            <h4>Edit Stats</h4>
+            <div class="admin-row"><label>Distance (m)</label><input id="admin-input-distance" type="number"><button class="admin-btn" id="admin-set-distance">SET</button></div>
+            <div class="admin-row"><label>Speed (m/s)</label><input id="admin-input-speed" type="number"><button class="admin-btn" id="admin-set-speed">SET</button></div>
+            <div class="admin-row"><label>67s (bank)</label><input id="admin-input-bank" type="number"><button class="admin-btn" id="admin-set-bank">SET</button></div>
+            <div class="admin-row"><label>Rebirths</label><input id="admin-input-rebirths" type="number"><button class="admin-btn" id="admin-set-rebirths">SET</button></div>
+          </div>
+          <button class="admin-btn" id="admin-logout-btn">LOG OUT</button>
         </div>
       </div>
     </div>
